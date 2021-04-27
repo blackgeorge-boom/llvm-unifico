@@ -364,6 +364,12 @@ static void addSymbolRewriterPass(const CodeGenOptions &Opts,
   MPM->add(createRewriteSymbolsPass(DL));
 }
 
+static void addPopcornAlignmentPasses(const PassManagerBuilder &Builder,
+				      legacy::PassManagerBase &PM) {
+  PM.add(createNameStringLiteralsPass());
+  PM.add(createStaticVarSectionsPass());
+}
+
 static CodeGenOpt::Level getCGOptLevel(const CodeGenOptions &CodeGenOpts) {
   switch (CodeGenOpts.OptimizationLevel) {
   default:
@@ -716,6 +722,17 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
 
   if (!CodeGenOpts.SampleProfileFile.empty())
     PMBuilder.PGOSampleUse = CodeGenOpts.SampleProfileFile;
+
+  // Adjust global symbol linkage for alignment.
+  if (CodeGenOpts.PopcornAlignment) {
+	  if (CodeGenOpts.OptimizationLevel > 0)
+		PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
+				 addPopcornAlignmentPasses); // TODO: maybe remove
+	  else {
+		MPM.add(createNameStringLiteralsPass());
+		MPM.add(createStaticVarSectionsPass());
+	  }
+  }
 
   PMBuilder.populateFunctionPassManager(FPM);
   PMBuilder.populateModulePassManager(MPM);
