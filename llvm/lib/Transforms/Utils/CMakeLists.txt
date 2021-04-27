@@ -41,6 +41,7 @@ add_llvm_library(LLVMTransformUtils
   Mem2Reg.cpp
   MetaRenamer.cpp
   ModuleUtils.cpp
+  NameStringLiterals.cpp
   NameAnonGlobals.cpp
   PredicateInfo.cpp
   PromoteMemoryToRegister.cpp
@@ -53,6 +54,7 @@ add_llvm_library(LLVMTransformUtils
   SimplifyLibCalls.cpp
   SizeOpts.cpp
   SplitModule.cpp
+  StaticVarSections.cpp
   StripNonLineTableDebugInfo.cpp
   SymbolRewriter.cpp
   UnifyFunctionExitNodes.cpp

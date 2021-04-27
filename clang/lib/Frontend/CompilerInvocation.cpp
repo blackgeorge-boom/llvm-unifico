@@ -1348,6 +1348,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
 
   Opts.SymbolPartition = Args.getLastArgValue(OPT_fsymbol_partition_EQ);
 
+  Opts.PopcornAlignment = Args.hasArg(OPT_popcorn_alignment);
+
   return Success;
 }
 

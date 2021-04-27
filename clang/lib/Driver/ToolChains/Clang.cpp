@@ -5229,6 +5229,13 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
+  if(Args.hasArg(options::OPT_popcorn_alignment)) {
+    // Only symbol alignment
+    //CmdArgs.push_back("-ffunction-sections");
+    //CmdArgs.push_back("-fdata-sections");
+    CmdArgs.push_back("-popcorn-alignment");
+  }
+
   // With -save-temps, we want to save the unoptimized bitcode output from the
   // CompileJobAction, use -disable-llvm-passes to get pristine IR generated
   // by the frontend.
