@@ -1,4 +1,4 @@
-#define DEBUG_TYPE "machinecount"
+#define DEBUG_TYPE "machinecount_arm"
 
 #include "AArch64.h"
 #include "llvm/Pass.h"
@@ -37,5 +37,5 @@ FunctionPass *llvm::createMyCustomMachinePass() {
 }
 
 char MachineCountPass::ID = 0;
-static RegisterPass<MachineCountPass> X("machinecount", "Machine Count Pass");
+static RegisterPass<MachineCountPass> X("machinecount_arm", "Machine Count Pass Arm");
 
