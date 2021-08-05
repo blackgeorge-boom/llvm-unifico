@@ -44,6 +44,10 @@
 #include "llvm/MC/MCSymbolELF.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
 
+#include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/JSON.h"
+#include <system_error>
+
 using namespace llvm;
 
 namespace {
@@ -2314,6 +2318,36 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
     // after it.
     SMShadowTracker.emitShadowPadding(*OutStreamer, getSubtargetInfo());
     // Then emit the call
+
+	MCContext &OutContext = OutStreamer->getContext();
+	OutContext.setAllowTemporaryLabels(true);
+	OutContext.setUseNamesOnTempLabels(true);
+	MCSymbol *MILabel = OutContext.createTempSymbol(MF->getName(), true);
+
+	StringRef Filename = TM.Options.MCOptions.CallsitePaddingFilename;
+
+	if (!Filename.empty()) {
+
+		ErrorOr<std::unique_ptr<MemoryBuffer>> FileOrErr = MemoryBuffer::getFileOrSTDIN(Filename);
+		if (std::error_code EC = FileOrErr.getError()) {
+			auto Err = SMDiagnostic(Filename, SourceMgr::DK_Error,
+					"Could not open input file: " + EC.message());
+		}
+
+		Expected<llvm::json::Value> E = llvm::json::parse((FileOrErr.get())->getBuffer());
+		assert(E);
+		Optional<int64_t> Padding;
+		if (llvm::json::Object* O = E->getAsObject())
+			if (llvm::json::Object* Opts = O->getObject("x86-64"))
+				if (Padding = Opts->getInteger(MILabel->getName())) {
+					assert(Opts->get(MILabel->getName())->kind() == llvm::json::Value::Number);
+				}
+
+		if (Padding.hasValue()) {
+			EmitNops(*OutStreamer, Padding.getValue(), Subtarget->is64Bit(), getSubtargetInfo());
+		}
+	}
+
     OutStreamer->EmitInstruction(TmpInst, getSubtargetInfo());
     return;
   }
