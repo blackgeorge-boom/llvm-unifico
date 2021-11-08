@@ -2940,8 +2940,8 @@ void AsmPrinter::EmitBasicBlockStart(const MachineBasicBlock &MBB) const {
   }
 
   // Emit an alignment directive for this block, if needed.
-  if (unsigned Align = MBB.getAlignment())
-    EmitAlignment(Align);
+  //if (unsigned Align = MBB.getAlignment())
+  //  EmitAlignment(Align);
   MCCodePaddingContext Context;
   setupCodePaddingContext(MBB, Context);
   OutStreamer->EmitCodePaddingBasicBlockStart(Context);
