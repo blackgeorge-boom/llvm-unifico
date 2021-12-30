@@ -1048,6 +1048,8 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
   }
   if (const Arg *A = Args.getLastArg(options::OPT_target))
     TargetTriple = A->getValue();
+  if (const Arg *A = Args.getLastArg(options::OPT_popcorn_target))
+    PopcornTargetTriple = A->getValue();
   if (const Arg *A = Args.getLastArg(options::OPT_ccc_install_dir))
     Dir = InstalledDir = A->getValue();
   for (const Arg *A : Args.filtered(options::OPT_B)) {
@@ -4485,7 +4487,14 @@ void Driver::generatePrefixedToolNames(
     StringRef Tool, const ToolChain &TC,
     SmallVectorImpl<std::string> &Names) const {
   // FIXME: Needs a better variable than TargetTriple
-  Names.emplace_back((TargetTriple + "-" + Tool).str());
+
+  // When the -popcorn-target option is specified, use that target to
+  // search for aux. tools.
+  auto target = TargetTriple;
+  if (PopcornTargetTriple != "")
+    target = PopcornTargetTriple;
+
+  Names.emplace_back((target + "-" + Tool).str());
   Names.emplace_back(Tool);
 
   // Allow the discovery of tools prefixed with LLVM's default target triple.

@@ -271,6 +271,12 @@ CODEGENOPT(DebugFwdTemplateParams, 1, 0) ///< Whether to emit complete
 
 CODEGENOPT(EmitLLVMUseLists, 1, 0) ///< Control whether to serialize use-lists.
 
+/// Select places inside functions to instrument with migration points
+CODEGENOPT(PopcornMigratable, 1, 0)
+
+/// Adjust linkage of global values for symbol alignment
+CODEGENOPT(PopcornAlignment, 1, 0)
+
 CODEGENOPT(WholeProgramVTables, 1, 0) ///< Whether to apply whole-program
                                       ///  vtable optimization.
 

@@ -129,6 +129,10 @@ namespace llvm {
   // instruction and update the MachineFunctionInfo with that information.
   extern char &ShrinkWrapID;
 
+  /// Stack transformation metadata pass.  Gather additional stack
+  /// transformation metadata from machine functions.
+  extern char &StackTransformMetadataID;
+
   /// LiveRangeShrink pass. Move instruction close to its definition to shrink
   /// the definition's live range.
   extern char &LiveRangeShrinkID;
@@ -406,6 +410,17 @@ namespace llvm {
   /// This pass splits the stack into a safe stack and an unsafe stack to
   /// protect against stack-based overflow vulnerabilities.
   FunctionPass *createSafeStackPass();
+
+  /// \brief This pass inserts equivalence points into functions.
+  FunctionPass *createMigrationPointsPass();
+
+  /// \brief This pass inserts stack map intrinsics at equivalence points in
+  /// order to record live value locations
+  ModulePass *createInsertStackMapsPass();
+
+  /// \brief This pass inserts stack map intrinsics similarly to InsertStackMaps,
+  /// but only in thread start functions inside of libc
+  ModulePass *createLibcStackMapsPass();
 
   /// This pass detects subregister lanes in a virtual register that are used
   /// independently of other lanes and splits them into separate virtual

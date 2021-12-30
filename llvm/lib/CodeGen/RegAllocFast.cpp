@@ -1291,6 +1291,13 @@ void RegAllocFast::allocateBasicBlock(MachineBasicBlock &MBB) {
 }
 
 bool RegAllocFast::runOnMachineFunction(MachineFunction &MF) {
+  // TODO the fast register allocator behaves poorly for stackmaps with lots
+  // of operands, and since it doesn't use the VirtRegRewriter pass we can't
+  // capture correct stackmap operand locations
+  if(MF.getFrameInfo().hasPcnStackMap())
+    llvm_unreachable("Fast register allocator not supported for stack"
+                     "transformation");
+
   LLVM_DEBUG(dbgs() << "********** FAST REGISTER ALLOCATION **********\n"
                     << "********** Function: " << MF.getName() << '\n');
   MRI = &MF.getRegInfo();

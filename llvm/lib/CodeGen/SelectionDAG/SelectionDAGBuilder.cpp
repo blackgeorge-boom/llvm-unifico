@@ -6574,6 +6574,9 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
   case Intrinsic::experimental_stackmap:
     visitStackmap(I);
     return;
+  case Intrinsic::experimental_pcn_stackmap:
+    visitPcnStackmap(I);
+    return;
   case Intrinsic::experimental_patchpoint_void:
   case Intrinsic::experimental_patchpoint_i64:
     visitPatchpoint(&I);
@@ -8655,6 +8658,144 @@ void SelectionDAGBuilder::visitStackmap(const CallInst &CI) {
 
   // Inform the Frame Information that we have a stackmap in this function.
   FuncInfo.MF->getFrameInfo().setHasStackMap();
+}
+
+/// Lower llvm.experimental.stackmap directly to its target opcode.
+void SelectionDAGBuilder::visitPcnStackmap(const CallInst &CI) {
+  // void @llvm.experimental.stackmap(i32 <id>, i32 <numShadowBytes>,
+  //                                  [live variables...])
+
+  assert(CI.getType()->isVoidTy() && "Stackmap cannot return a value.");
+
+  SDValue Chain, InFlag, Callee, NullPtr;
+  SmallVector<SDValue, 32> Ops;
+
+  SDLoc DL = getCurSDLoc();
+  Callee = getValue(CI.getCalledValue());
+  NullPtr = DAG.getIntPtrConstant(0, DL, true);
+
+  // Popcorn: we need to insert the stackmap directly after the call
+  // instruction, so grab the chain from the CALLSEQ_END node.  Note that
+  // although we're moving the stackmap between the call & return value
+  // copy-out, the stackmap doesn't generate code so we're not clobbering
+  // return values.
+  Chain = getRoot();
+  SDNode *CSE = Chain.getNode(), *RetCopyOut = nullptr;
+  while(CSE && CSE->getOpcode() != ISD::CALLSEQ_END) {
+    RetCopyOut = CSE;
+    CSE = CSE->getGluedNode();
+  }
+
+  // It's possible the function call that induced this stackmap to be generated
+  // got lowered directly to a machine instruction, which can lead to weird
+  // cases like trying to glue this stackmap to another.  This causes the
+  // instruction scheduler to choke, so avoid that situation.
+  // TODO why does gluing 2 stackmaps cause it to die?  It complains about
+  // NumLiveRegs already being zero for releasing call dependencies in
+  // ScheduleDAGRRList.cpp:759
+  if(CSE && CSE->getOpcode() == ISD::CALLSEQ_END) {
+    SDNode *Check = CSE;
+    do {
+      if(Check->isMachineOpcode() &&
+         Check->getMachineOpcode() == TargetOpcode::PCN_STACKMAP) {
+        CSE = nullptr;
+        break;
+      }
+    } while((Check = Check->getGluedNode()));
+  }
+
+  if(CSE && CSE->getOpcode() == ISD::CALLSEQ_END) Chain = SDValue(CSE, 0);
+  else {
+    LLVM_DEBUG(dbgs() << "WARNING: no call node for: "; Chain->dump());
+    RetCopyOut = nullptr;
+  }
+  assert(Chain.getSimpleValueType() == MVT::Other && "Invalid chain");
+
+  // The stackmap intrinsic only records the live variables (the arguemnts
+  // passed to it) and emits NOPS (if requested). Unlike the patchpoint
+  // intrinsic, this won't be lowered to a function call. This means we don't
+  // have to worry about calling conventions and target specific lowering code.
+  // Instead we perform the call lowering right here.
+  //
+  // chain, flag = CALLSEQ_START(chain, 0, 0)
+  // chain, flag = STACKMAP(id, nbytes, ..., chain, flag)
+  // chain, flag = CALLSEQ_END(chain, 0, 0, flag)
+  //
+  Chain = DAG.getCALLSEQ_START(Chain, 0, 0, DL);
+  InFlag = Chain.getValue(1);
+
+  // Popcorn: add glue operand to CALLSEQ_START to tie the stackmap to the
+  // call sequence (note that it already produces a glue value).
+  if(CSE) {
+    SmallVector<EVT, 2> VTs(Chain->value_begin(), Chain->value_end());
+    SDVTList VTList = DAG.getVTList(VTs);
+    for(auto &Op : Chain->ops()) Ops.push_back(Op);
+    assert(Ops.back().getSimpleValueType() != MVT::Glue &&
+           "Already have glue");
+    Ops.push_back(SDValue(CSE, 1));
+    assert(Ops.back().getSimpleValueType() == MVT::Glue &&
+           "Invalid glue operand");
+    Chain.setNode(DAG.MorphNodeTo(Chain.getNode(), Chain->getOpcode(),
+                                  VTList, Ops));
+    InFlag = Chain.getValue(1);
+    Ops.clear();
+  }
+
+  // Add the <id> and <numBytes> constants.
+  SDValue IDVal = getValue(CI.getOperand(PatchPointOpers::IDPos));
+  Ops.push_back(DAG.getTargetConstant(
+                  cast<ConstantSDNode>(IDVal)->getZExtValue(), DL, MVT::i64));
+  SDValue NBytesVal = getValue(CI.getOperand(PatchPointOpers::NBytesPos));
+  Ops.push_back(DAG.getTargetConstant(
+                  cast<ConstantSDNode>(NBytesVal)->getZExtValue(), DL,
+                  MVT::i32));
+
+  // Push live variables for the stack map.
+  addStackMapLiveVars(&CI, 2, DL, Ops, *this);
+
+  // We are not pushing any register mask info here on the operands list,
+  // because the stackmap doesn't clobber anything.
+
+  // Push the chain and the glue flag.
+  Ops.push_back(Chain);
+  Ops.push_back(InFlag);
+
+  // Create the STACKMAP node.
+  SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
+  SDNode *SM = DAG.getMachineNode(TargetOpcode::PCN_STACKMAP, DL, NodeTys, Ops);
+  Chain = SDValue(SM, 0);
+  InFlag = Chain.getValue(1);
+
+  Chain = DAG.getCALLSEQ_END(Chain, NullPtr, NullPtr, InFlag, DL);
+  InFlag = Chain.getValue(1);
+
+  // Stackmaps don't generate values, so nothing goes into the NodeMap.
+
+  // Popcorn: fix-up the glue so the return-value copy outs happen after
+  // the stackmap's CALLSEQ_END.  Note that this is *required*, otherwise
+  // the backend won't correctly track physical register outputs from call.
+  if(RetCopyOut) {
+    unsigned NOpts = RetCopyOut->getNumOperands();
+    Ops.clear();
+    for(size_t i = 0; i < NOpts; i++) {
+      if(RetCopyOut->getOperand(i).getSimpleValueType() == MVT::Other)
+        Ops.push_back(Chain);
+      else if(RetCopyOut->getOperand(i).getSimpleValueType() == MVT::Glue)
+        Ops.push_back(InFlag);
+      else Ops.push_back(RetCopyOut->getOperand(i));
+    }
+    RetCopyOut = DAG.UpdateNodeOperands(RetCopyOut, Ops);
+
+    while(RetCopyOut->getGluedUser()) RetCopyOut = RetCopyOut->getGluedUser();
+    Chain = SDValue(RetCopyOut, NOpts - 2);
+    assert(Chain.getSimpleValueType() == MVT::Other && "Invalid chain");
+  }
+
+  // Set the root to the target-lowered call chain.
+  DAG.setRoot(Chain);
+
+  // Inform the Frame Information that we have a stackmap in this function.
+  FuncInfo.MF->getFrameInfo().setHasPcnStackMap();
 }
 
 /// Lower llvm.experimental.patchpoint directly to its target opcode.

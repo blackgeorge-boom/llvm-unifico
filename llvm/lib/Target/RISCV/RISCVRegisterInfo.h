@@ -41,6 +41,9 @@ struct RISCVRegisterInfo : public RISCVGenRegisterInfo {
 
   Register getFrameRegister(const MachineFunction &MF) const override;
 
+  int getReturnAddrLoc(const MachineFunction &MF,
+		       unsigned &BaseReg) const override;
+
   bool requiresRegisterScavenging(const MachineFunction &MF) const override {
     return true;
   }

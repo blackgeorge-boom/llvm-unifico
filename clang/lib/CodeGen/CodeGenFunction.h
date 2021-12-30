@@ -564,6 +564,15 @@ public:
     return DominatingValue<T>::save(*this, value);
   }
 
+  /// \brief Locals that were offloaded to global memory for a captured
+  /// statement and need to be restored after the statement has executed.
+  /// First declaration in the pair is the local, second is the global.
+  /// Maintain a mapping of captured statements & their offloaded locals.
+  typedef std::pair<ValueDecl *, ValueDecl *> OffloadPair;
+  typedef llvm::SmallVector<OffloadPair, 4> OffloadList;
+  typedef llvm::DenseMap<const CapturedStmt *, OffloadList> OffloadMap;
+  OffloadMap OffloadedLocals;
+
 public:
   /// ObjCEHValueStack - Stack of Objective-C exception values, used for
   /// rethrows.
@@ -2959,6 +2968,17 @@ public:
   void EmitCXXForRangeStmt(const CXXForRangeStmt &S,
                            ArrayRef<const Attr *> Attrs = None);
 
+  /// Offload/restore capabilities for local variables captured in
+  /// capture statements.
+  void addOffloaded(const CapturedStmt *S, ValueDecl *L, ValueDecl *G);
+  const OffloadList &getOffloaded(const CapturedStmt *S) const;
+  VarDecl *CreateOffloadedGlobal(const Stmt &S, QualType Ty, std::string &Name);
+  VarDecl *CreateOffloadedGlobal(const Stmt &S, const Expr *I);
+  LValue GetVarDeclLValue(QualType SrcType, VarDecl *VD);
+  LValue GetVarDeclLValue(const Expr *I, VarDecl *VD);
+  DeclRefExpr *GetDeclRefForOffload(ValueDecl *VD);
+  void RestoreOffloadedLocals(const CapturedStmt *S);
+
   /// Controls insertion of cancellation exit blocks in worksharing constructs.
   class OMPCancelStackRAII {
     CodeGenFunction &CGF;
@@ -3101,6 +3121,10 @@ public:
   /// \return true if at least one linear variable is found that should be
   /// initialized with the value of the original variable, false otherwise.
   bool EmitOMPLinearClauseInit(const OMPLoopDirective &D);
+  /// Emit prefetching requests for loop directive.
+  ///
+  /// \param D Directive (possibly) with the 'prefetch' clause.
+  void EmitOMPPrefetchClauses(const OMPLoopDirective &D);
 
   typedef const llvm::function_ref<void(CodeGenFunction & /*CGF*/,
                                         llvm::Function * /*OutlinedFn*/,

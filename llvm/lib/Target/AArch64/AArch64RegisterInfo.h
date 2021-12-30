@@ -115,6 +115,9 @@ public:
   // Debug information queries.
   Register getFrameRegister(const MachineFunction &MF) const override;
 
+  int getReturnAddrLoc(const MachineFunction &MF,
+                       unsigned &BaseReg) const override;
+
   unsigned getRegPressureLimit(const TargetRegisterClass *RC,
                                MachineFunction &MF) const override;
 

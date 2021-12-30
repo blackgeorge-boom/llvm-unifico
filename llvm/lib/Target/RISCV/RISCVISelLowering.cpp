@@ -392,6 +392,9 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
     SDValue FPConv = DAG.getNode(RISCVISD::FMV_W_X_RV64, DL, MVT::f32, NewOp0);
     return FPConv;
   }
+  case (uint16_t)~TargetOpcode::STACKMAP:
+  case (uint16_t)~TargetOpcode::PCN_STACKMAP:
+    return SDValue(); // Use generic stackmap type legalizer
   }
 }
 
@@ -1332,6 +1335,9 @@ RISCVTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
     return emitBuildPairF64Pseudo(MI, BB);
   case RISCV::SplitF64Pseudo:
     return emitSplitF64Pseudo(MI, BB);
+  case TargetOpcode::STACKMAP:
+  case TargetOpcode::PCN_STACKMAP:
+    return emitPatchPoint(MI, BB);
   }
 }
 

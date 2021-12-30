@@ -42,8 +42,10 @@ void llvm::initializeAnalysis(PassRegistry &Registry) {
   initializeDomViewerPass(Registry);
   initializeDomPrinterPass(Registry);
   initializeDomOnlyViewerPass(Registry);
+  initializeEnumerateLoopPathsPass(Registry);
   initializePostDomViewerPass(Registry);
   initializeDomOnlyPrinterPass(Registry);
+  initializePopcornCompatibilityPass(Registry);
   initializePostDomPrinterPass(Registry);
   initializePostDomOnlyViewerPass(Registry);
   initializePostDomOnlyPrinterPass(Registry);
@@ -58,6 +60,7 @@ void llvm::initializeAnalysis(PassRegistry &Registry) {
   initializeLazyValueInfoPrinterPass(Registry);
   initializeLegacyDivergenceAnalysisPass(Registry);
   initializeLintPass(Registry);
+  initializeLiveValuesPass(Registry);
   initializeLoopInfoWrapperPassPass(Registry);
   initializeMemDepPrinterPass(Registry);
   initializeMemDerefPrinterPass(Registry);
@@ -76,6 +79,7 @@ void llvm::initializeAnalysis(PassRegistry &Registry) {
   initializeRegionOnlyPrinterPass(Registry);
   initializeSCEVAAWrapperPassPass(Registry);
   initializeScalarEvolutionWrapperPassPass(Registry);
+  initializeSelectMigrationPointsPass(Registry);
   initializeStackSafetyGlobalInfoWrapperPassPass(Registry);
   initializeStackSafetyInfoWrapperPassPass(Registry);
   initializeTargetTransformInfoWrapperPassPass(Registry);

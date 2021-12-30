@@ -369,6 +369,7 @@ private:
   SDValue PromoteIntOp_Shift(SDNode *N);
   SDValue PromoteIntOp_SIGN_EXTEND(SDNode *N);
   SDValue PromoteIntOp_SINT_TO_FP(SDNode *N);
+  SDValue PromoteIntOp_STACKMAP(SDNode *N, unsigned OpNo);
   SDValue PromoteIntOp_STORE(StoreSDNode *N, unsigned OpNo);
   SDValue PromoteIntOp_TRUNCATE(SDNode *N);
   SDValue PromoteIntOp_UINT_TO_FP(SDNode *N);
@@ -464,6 +465,7 @@ private:
   SDValue ExpandIntOp_UINT_TO_FP(SDNode *N);
   SDValue ExpandIntOp_RETURNADDR(SDNode *N);
   SDValue ExpandIntOp_ATOMIC_STORE(SDNode *N);
+  SDValue ExpandIntOp_STACKMAP(SDNode *N, unsigned OpNo);
 
   void IntegerExpandSetCCOperands(SDValue &NewLHS, SDValue &NewRHS,
                                   ISD::CondCode &CCCode, const SDLoc &dl);

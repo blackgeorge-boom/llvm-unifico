@@ -105,6 +105,16 @@ void RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   MachineBasicBlock &MBB = *MI.getParent();
   bool FrameRegIsKill = false;
 
+  // Special handling of dbg_value, stackmap and patchpoint instructions.
+  if (MI.isDebugValue() || MI.getOpcode() == TargetOpcode::STACKMAP ||
+      MI.getOpcode() == TargetOpcode::PATCHPOINT ||
+      MI.getOpcode() == TargetOpcode::PCN_STACKMAP) {
+    Offset += MI.getOperand(FIOperandNum + 1).getImm();
+    MI.getOperand(FIOperandNum).ChangeToRegister(FrameReg, false /*isDef*/);
+    MI.getOperand(FIOperandNum + 1).ChangeToImmediate(Offset);
+    return;
+  }
+
   if (!isInt<12>(Offset)) {
     assert(isInt<32>(Offset) && "Int32 expected");
     // The offset won't fit in an immediate, so use a scratch register instead
@@ -127,6 +137,23 @@ void RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 Register RISCVRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
   const TargetFrameLowering *TFI = getFrameLowering(MF);
   return TFI->hasFP(MF) ? RISCV::X8 : RISCV::X2;
+}
+
+int RISCVRegisterInfo::getReturnAddrLoc(const MachineFunction &MF,
+                                          unsigned &BaseReg) const {
+  const TargetFrameLowering *TFL = MF.getSubtarget().getFrameLowering();
+  const MachineFrameInfo *MFI = &MF.getFrameInfo();
+  assert(MFI->isCalleeSavedInfoValid() && "No callee-saved information");
+  const std::vector<CalleeSavedInfo> &CSI = MFI->getCalleeSavedInfo();
+
+  // The return address' location is the the link register's spill slot
+  for(unsigned i = 0, e = CSI.size(); i < e; i++)
+    if(CSI[i].getReg() == RISCV::X1)
+      return TFL->getFrameIndexReference(MF, CSI[i].getFrameIdx(), BaseReg);
+
+  // We didn't find it, is it actually saved?
+  BaseReg = 0;
+  return INT32_MAX;
 }
 
 const uint32_t *

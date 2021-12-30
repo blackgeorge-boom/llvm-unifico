@@ -262,6 +262,13 @@ public:
     return Invocation->getCodeGenOpts();
   }
 
+  CodeGenOptions &getCodeGenNoOpts() {
+    return Invocation->getCodeGenNoOpts();
+  }
+  const CodeGenOptions &getCodeGenNoOpts() const {
+    return Invocation->getCodeGenNoOpts();
+  }
+
   DependencyOutputOptions &getDependencyOutputOpts() {
     return Invocation->getDependencyOutputOpts();
   }

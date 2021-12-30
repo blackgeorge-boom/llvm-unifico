@@ -40,6 +40,7 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/StackMaps.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/UnwindInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -68,13 +69,14 @@ namespace {
 
 class AArch64AsmPrinter : public AsmPrinter {
   AArch64MCInstLower MCInstLowering;
-  StackMaps SM;
+  StackMaps SM, PSM;
   const AArch64Subtarget *STI;
+  UnwindInfo UI;
 
 public:
   AArch64AsmPrinter(TargetMachine &TM, std::unique_ptr<MCStreamer> Streamer)
       : AsmPrinter(TM, std::move(Streamer)), MCInstLowering(OutContext, *this),
-        SM(*this) {}
+        SM(*this), PSM(*this), UI(*this) {}
 
   StringRef getPassName() const override { return "AArch64 Assembly Printer"; }
 
@@ -91,6 +93,8 @@ public:
   void LowerJumpTableDestSmall(MCStreamer &OutStreamer, const MachineInstr &MI);
 
   void LowerSTACKMAP(MCStreamer &OutStreamer, StackMaps &SM,
+                     const MachineInstr &MI);
+  void LowerPCN_STACKMAP(MCStreamer &OutStreamer, StackMaps &SM,
                      const MachineInstr &MI);
   void LowerPATCHPOINT(MCStreamer &OutStreamer, StackMaps &SM,
                        const MachineInstr &MI);
@@ -121,6 +125,8 @@ public:
     AArch64FI = MF.getInfo<AArch64FunctionInfo>();
     STI = static_cast<const AArch64Subtarget*>(&MF.getSubtarget());
 
+    bool modified = TagCallSites(MF);
+
     SetupMachineFunction(MF);
 
     if (STI->isTargetCOFF()) {
@@ -142,8 +148,11 @@ public:
     // Emit the XRay table for this function.
     emitXRayTable();
 
+    if(MF.getFrameInfo().hasPcnStackMap())
+      UI.recordUnwindInfo(MF);
+
     // We didn't modify anything.
-    return false;
+    return modified;
   }
 
 private:
@@ -443,6 +452,9 @@ void AArch64AsmPrinter::EmitEndOfAsmFile(Module &M) {
     OutStreamer->EmitAssemblerFlag(MCAF_SubsectionsViaSymbols);
     emitStackMaps(SM);
   }
+  UI.serializeToUnwindInfoSection();
+  PSM.serializeToPcnStackMapSection(&UI);
+  UI.reset(); // Must reset after PSM serialization to clear metadata  
 }
 
 void AArch64AsmPrinter::EmitLOHs() {
@@ -787,6 +799,33 @@ void AArch64AsmPrinter::LowerSTACKMAP(MCStreamer &OutStreamer, StackMaps &SM,
     EmitToStreamer(OutStreamer, MCInstBuilder(AArch64::HINT).addImm(0));
 }
 
+void AArch64AsmPrinter::LowerPCN_STACKMAP(MCStreamer &OutStreamer,
+					  StackMaps &SM,
+					  const MachineInstr &MI) {
+  unsigned NumNOPBytes = StackMapOpers(&MI).getNumPatchBytes();
+
+  SM.recordPcnStackMap(MI);
+  assert(NumNOPBytes % 4 == 0 && "Invalid number of NOP bytes requested!");
+
+  // Scan ahead to trim the shadow.
+  const MachineBasicBlock &MBB = *MI.getParent();
+  MachineBasicBlock::const_iterator MII(MI);
+  ++MII;
+  while (NumNOPBytes > 0) {
+    if (MII == MBB.end() || MII->isCall() ||
+        MII->getOpcode() == AArch64::DBG_VALUE ||
+        MII->getOpcode() == TargetOpcode::PATCHPOINT ||
+        MII->getOpcode() == TargetOpcode::STACKMAP)
+      break;
+    ++MII;
+    NumNOPBytes -= 4;
+  }
+
+  // Emit nops.
+  for (unsigned i = 0; i < NumNOPBytes; i += 4)
+    EmitToStreamer(OutStreamer, MCInstBuilder(AArch64::HINT).addImm(0));
+}
+
 // Lower a patchpoint of the form:
 // [<def>], <id>, <numBytes>, <target>, <numArgs>
 void AArch64AsmPrinter::LowerPATCHPOINT(MCStreamer &OutStreamer, StackMaps &SM,
@@ -1067,6 +1106,9 @@ void AArch64AsmPrinter::EmitInstruction(const MachineInstr *MI) {
 
   case TargetOpcode::STACKMAP:
     return LowerSTACKMAP(*OutStreamer, SM, *MI);
+
+  case TargetOpcode::PCN_STACKMAP:
+    return LowerPCN_STACKMAP(*OutStreamer, PSM, *MI);
 
   case TargetOpcode::PATCHPOINT:
     return LowerPATCHPOINT(*OutStreamer, SM, *MI);

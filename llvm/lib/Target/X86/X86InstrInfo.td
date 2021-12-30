@@ -196,7 +196,7 @@ def X86vaarg64 :
                          SDNPMemOperand]>;
 def X86callseq_start :
                  SDNode<"ISD::CALLSEQ_START", SDT_X86CallSeqStart,
-                        [SDNPHasChain, SDNPOutGlue]>;
+                        [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
 def X86callseq_end :
                  SDNode<"ISD::CALLSEQ_END",   SDT_X86CallSeqEnd,
                         [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;

@@ -18,6 +18,7 @@
 #include "AArch64InstrInfo.h"
 #include "AArch64RegisterInfo.h"
 #include "AArch64SelectionDAGInfo.h"
+#include "AArch64Values.h"
 #include "llvm/CodeGen/GlobalISel/CallLowering.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelector.h"
 #include "llvm/CodeGen/GlobalISel/LegalizerInfo.h"
@@ -209,6 +210,7 @@ protected:
   AArch64InstrInfo InstrInfo;
   AArch64SelectionDAGInfo TSInfo;
   AArch64TargetLowering TLInfo;
+  AArch64Values VGen;
 
   /// GlobalISel related APIs.
   std::unique_ptr<CallLowering> CallLoweringInfo;
@@ -245,6 +247,9 @@ public:
   const AArch64InstrInfo *getInstrInfo() const override { return &InstrInfo; }
   const AArch64RegisterInfo *getRegisterInfo() const override {
     return &getInstrInfo()->getRegisterInfo();
+  }
+  const AArch64Values *getValues() const override {
+    return &VGen;
   }
   const CallLowering *getCallLowering() const override;
   const InstructionSelector *getInstructionSelector() const override;

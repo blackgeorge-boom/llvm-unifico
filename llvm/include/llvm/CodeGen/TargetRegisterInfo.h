@@ -1005,6 +1005,17 @@ public:
                                    const MachineRegisterInfo &MRI) const {
     return nullptr;
   }
+
+  /// getReturnAddrLoc - This method should return the location of the saved
+  /// return address on the stack, expressed as a base register (returned via
+  /// BaseReg) and an offset
+  virtual int getReturnAddrLoc(const MachineFunction &MF,
+                               unsigned &BaseReg) const
+  {
+    llvm_unreachable("Not implemented for target!");
+    BaseReg = 0;
+    return INT32_MAX;
+  }
 };
 
 //===----------------------------------------------------------------------===//

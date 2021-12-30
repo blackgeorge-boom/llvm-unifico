@@ -765,6 +765,11 @@ void OMPClauseProfiler::VisitOMPIsDevicePtrClause(
     const OMPIsDevicePtrClause *C) {
   VisitOMPClauseList(C);
 }
+void OMPClauseProfiler::VisitOMPPrefetchClause(const OMPPrefetchClause *C) {
+  VisitOMPClauseList(C);
+  Profiler->VisitStmt(C->getStartOfRange());
+  Profiler->VisitStmt(C->getEndOfRange());
+}
 }
 
 void

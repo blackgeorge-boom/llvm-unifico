@@ -1862,7 +1862,8 @@ void Clang::AddRISCVTargetArgs(const ArgList &Args,
   else if (Triple.getArch() == llvm::Triple::riscv32)
     ABIName = "ilp32";
   else if (Triple.getArch() == llvm::Triple::riscv64)
-    ABIName = "lp64";
+    // POPCORN: default to lp64d
+    ABIName = "lp64d";
   else
     llvm_unreachable("Unexpected triple!");
 
@@ -5228,6 +5229,58 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       A->render(Args, CmdArgs);
     }
   }
+
+  // Forward Popcorn & other standard compiler flags to -cc1 to generate
+  // multi-ISA binaries
+  if(Args.hasArg(options::OPT_popcorn_migratable) ||
+     Args.hasArg(options::OPT_popcorn_metadata)) {
+    // Full-blown Popcorn migration capabilities, including adding migration
+    // points, symbol alignment and generating stack transformation metadata
+    CmdArgs.push_back("-ffunction-sections");
+    CmdArgs.push_back("-fdata-sections");
+    CmdArgs.push_back("-popcorn-alignment");
+    CmdArgs.push_back("-popcorn-migratable");
+    CmdArgs.push_back("-mllvm");
+    if(Args.hasArg(options::OPT_popcorn_migratable))
+      CmdArgs.push_back("-popcorn-instrument=migration");
+    else
+      CmdArgs.push_back("-popcorn-instrument=metadata");
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("-optimize-regalloc");
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("-fast-isel=false");
+    // FIXME: Workaround for RISCV GlobalAddress register allocation
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("-disable-machine-cse");
+    for(auto Target : Args.getAllArgValues(options::OPT_popcorn_target)) {
+      std::string combined("-popcorn-target=" + Target);
+      CmdArgs.push_back(Args.MakeArgString(combined));
+    }
+  }
+  else if(Args.hasArg(options::OPT_popcorn_libc)) {
+    // Symbol alignment for libc & generate stack transformation metadata for
+    // libc thread start functions
+    CmdArgs.push_back("-ffunction-sections");
+    CmdArgs.push_back("-fdata-sections");
+    CmdArgs.push_back("-popcorn-alignment");
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("-popcorn-instrument=libc");
+    // FIXME: Workaround for RISCV GlobalAddress register allocation
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("-disable-machine-cse");
+  }
+  else if(Args.hasArg(options::OPT_popcorn_alignment)) {
+    // Only symbol alignment
+    CmdArgs.push_back("-ffunction-sections");
+    CmdArgs.push_back("-fdata-sections");
+    CmdArgs.push_back("-popcorn-alignment");
+    // FIXME: Workaround for RISCV GlobalAddress register allocation
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("-disable-machine-cse");
+  }
+
+  if(Args.hasArg(options::OPT_distributed_omp))
+    CmdArgs.push_back("-distributed-omp");
 
   // With -save-temps, we want to save the unoptimized bitcode output from the
   // CompileJobAction, use -disable-llvm-passes to get pristine IR generated

@@ -1202,6 +1202,14 @@ def err_omp_mapper_illegal_identifier : Error<
   "illegal OpenMP user-defined mapper identifier">;
 def err_omp_mapper_expected_declarator : Error<
   "expected declarator on 'omp declare mapper' directive">;
+def err_omp_invalid_prefetch_kind : Error<
+  "invalid argument; expected 'read', 'write' or 'smart'">;
+// TODO Technically these are semantics issues, but we're doing checking in the
+// parser for this particular clause
+def err_omp_invalid_prefetch_capture : Error<
+  "can only prefetch variables used in the loop body">;
+def err_omp_invalid_prefetch_loop_var : Error<
+  "can only prefetch loop iteration range using a loop iteration variable">;
 
 // Pragma loop support.
 def err_pragma_loop_missing_argument : Error<
@@ -1240,6 +1248,22 @@ def warn_pragma_force_cuda_host_device_bad_arg : Warning<
 def err_pragma_cannot_end_force_cuda_host_device : Error<
   "force_cuda_host_device end pragma without matching "
   "force_cuda_host_device begin">;
+
+// Pragma popcorn support.
+def warn_pragma_popcorn_ignored : Warning<
+  "Popcorn: unexpected '#pragma popcorn...' in program">, DefaultIgnore;
+def warn_pragma_popcorn_no_arg : Warning<
+  "Popcorn: missing argument; expected 'prefetch'">;
+def warn_pragma_popcorn_invalid_option : Warning<
+  "Popcorn: invalid pragma argument '%0'; expected 'prefetch'">;
+def err_pragma_popcorn_invalid_clause : Error<
+  "Popcorn: invalid clause '%0'; expected 'ignore'">;
+def err_pragma_popcorn_expected_var_name : Error<
+  "Popcorn: expected variable name">;
+
+// Pragma popcorn prefetch support.
+def warn_pragma_popcorn_prefetch_invalid_stmt : Warning<
+  "Popcorn: cannot prefetch for this statement">;
 } // end of Parse Issue category.
 
 let CategoryName = "Modules Issue" in {

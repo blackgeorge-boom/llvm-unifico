@@ -2934,6 +2934,7 @@ int X86TTIImpl::getIntImmCost(Intrinsic::ID IID, unsigned Idx, const APInt &Imm,
       return TTI::TCC_Free;
     break;
   case Intrinsic::experimental_stackmap:
+  case Intrinsic::experimental_pcn_stackmap:
     if ((Idx < 2) || (Imm.getBitWidth() <= 64 && isInt<64>(Imm.getSExtValue())))
       return TTI::TCC_Free;
     break;

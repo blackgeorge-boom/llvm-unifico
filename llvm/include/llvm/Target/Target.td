@@ -1092,6 +1092,14 @@ def STACKMAP : StandardPseudoInstruction {
   let mayLoad = 1;
   let usesCustomInserter = 1;
 }
+def PCN_STACKMAP : StandardPseudoInstruction {
+  let OutOperandList = (outs);
+  let InOperandList = (ins i64imm:$id, i32imm:$nbytes, variable_ops);
+  let hasSideEffects = 1;
+  let isCall = 1;
+  let mayLoad = 1;
+  let usesCustomInserter = 1;
+}
 def PATCHPOINT : StandardPseudoInstruction {
   let OutOperandList = (outs unknown:$dst);
   let InOperandList = (ins i64imm:$id, i32imm:$nbytes, unknown:$callee,

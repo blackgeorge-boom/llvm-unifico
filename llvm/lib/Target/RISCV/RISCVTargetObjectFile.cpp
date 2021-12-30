@@ -29,6 +29,9 @@ void RISCVELFTargetObjectFile::Initialize(MCContext &Ctx,
 // small section size threshold. Data in this section could be addressed by
 // using gp_rel operator.
 bool RISCVELFTargetObjectFile::isInSmallSection(uint64_t Size) const {
+  // FIXME: Use .data for everything to match other ISAs in Popcorn Linux.
+  return false;
+
   // gcc has traditionally not treated zero-sized objects as small data, so this
   // is effectively part of the ABI.
   return Size > 0 && Size <= SSThreshold;
@@ -38,6 +41,9 @@ bool RISCVELFTargetObjectFile::isInSmallSection(uint64_t Size) const {
 // section.
 bool RISCVELFTargetObjectFile::isGlobalInSmallSection(
     const GlobalObject *GO, const TargetMachine &TM) const {
+  // FIXME: Use .data for everything to match other ISAs in Popcorn Linux.
+  return false;
+  
   // Only global variables, not functions.
   const GlobalVariable *GVA = dyn_cast<GlobalVariable>(GO);
   if (!GVA)
@@ -74,11 +80,11 @@ bool RISCVELFTargetObjectFile::isGlobalInSmallSection(
 
 MCSection *RISCVELFTargetObjectFile::SelectSectionForGlobal(
     const GlobalObject *GO, SectionKind Kind, const TargetMachine &TM) const {
-  // Handle Small Section classification here.
-  if (Kind.isBSS() && isGlobalInSmallSection(GO, TM))
-    return SmallBSSSection;
-  if (Kind.isData() && isGlobalInSmallSection(GO, TM))
-    return SmallDataSection;
+//  // Handle Small Section classification here.
+//  if (Kind.isBSS() && isGlobalInSmallSection(GO, TM))
+//    return SmallBSSSection;
+//  if (Kind.isData() && isGlobalInSmallSection(GO, TM))
+//    return SmallDataSection;
 
   // Otherwise, we work the same as ELF.
   return TargetLoweringObjectFileELF::SelectSectionForGlobal(GO, Kind, TM);
@@ -100,14 +106,17 @@ void RISCVELFTargetObjectFile::getModuleMetadata(Module &M) {
 /// Return true if this constant should be placed into small data section.
 bool RISCVELFTargetObjectFile::isConstantInSmallSection(
     const DataLayout &DL, const Constant *CN) const {
+  // FIXME: Use .data for everything to match other ISAs in Popcorn Linux.
+  return false;
   return isInSmallSection(DL.getTypeAllocSize(CN->getType()));
 }
 
 MCSection *RISCVELFTargetObjectFile::getSectionForConstant(
     const DataLayout &DL, SectionKind Kind, const Constant *C,
     unsigned &Align) const {
-  if (isConstantInSmallSection(DL, C))
-    return SmallDataSection;
+  // FIXME: Use .data for everything to match other ISAs in Popcorn Linux.
+//  if (isConstantInSmallSection(DL, C))
+//    return SmallDataSection;
 
   // Otherwise, we work the same as ELF.
   return TargetLoweringObjectFileELF::getSectionForConstant(DL, Kind, C, Align);

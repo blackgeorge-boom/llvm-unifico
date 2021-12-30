@@ -30,6 +30,8 @@
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
+#include "llvm/CodeGen/StackTransformTypes.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/ArrayRecycler.h"
 #include "llvm/Support/AtomicOrdering.h"
@@ -340,6 +342,16 @@ class MachineFunction {
   std::vector<unsigned> FilterEnds;
 
   EHPersonality PersonalityTypeCache = EHPersonality::Unknown;
+
+  /// Information about changes in number of IR operands to number of machine
+  /// /// operands due to legalization.
+  SMToOpLegalizeMap SMOpLegalizeChanges;
+
+  /// Duplicate live value locations for stackmap operands
+  InstToOperands SMDuplicateLocs;
+
+  /// Architecture-specific live value locations for each stackmap
+  InstToArchLiveValues SMArchSpecificLocs;
 
   /// \}
 
@@ -783,6 +795,9 @@ public:
   /// Allocate and initialize a register mask with @p NumRegister bits.
   uint32_t *allocateRegMask();
 
+  /// Is a register caller-saved?
+  bool isCallerSaved(unsigned Reg) const;
+
   /// Allocate and construct an extra info structure for a `MachineInstr`.
   ///
   /// This is allocated on the function's allocator and so lives the life of
@@ -986,6 +1001,46 @@ public:
   /// call instruction with new one.
   void updateCallSiteInfo(const MachineInstr *Old,
                           const MachineInstr *New = nullptr);
+
+  //===--------------------------------------------------------------------===//
+  // Additional stack transformation metadata
+  //
+
+  /// Add a note indicating that machine operand number OpNo was changed to Num
+  /// operands in stackmap SMID.
+  void addOpLegalizeChange(int64_t SMID, unsigned OpNo, unsigned Num);
+
+  /// Add an IR/architecture-specific location mapping for a stackmap operand
+  void addSMOpLocation(const CallInst *SM, const Value *Val,
+                       const MachineLiveLoc &MLL);
+  void addSMOpLocation(const CallInst *SM, unsigned Op,
+                       const MachineLiveLoc &MLL);
+
+  /// Add an architecture-specific live value & location for a stackmap
+  void addSMArchSpecificLocation(const CallInst *SM,
+                                 const MachineLiveLoc &MLL,
+                                 const MachineLiveVal &MLV);
+
+  /// Update stack slot references to new indexes after stack slot coloring
+  void updateSMStackSlotRefs(SmallDenseMap<int, int, 16> &Changes);
+
+  /// Return the number of machine operands corresponding to a given IR operand.
+  unsigned getNumLegalizedOps(int64_t SMID, unsigned OpNo) const;
+
+  /// Are there any architecture-specific locations for operand Val in stackmap
+  /// SM?
+  bool hasSMOpLocations(const CallInst *SM, const Value *Val) const;
+
+  /// Are there any architecture-specific locations for stackmap SM?
+  bool hasSMArchSpecificLocations(const CallInst *SM) const;
+
+  /// Return the architecture-specific locations for a stackmap operand.
+  const MachineLiveLocs &getSMOpLocations(const CallInst *SM,
+                                          const Value *Val) const;
+
+  /// Return the architecture-specific locations for a stackmap that are not
+  /// associated with any operand.
+  const ArchLiveValues &getSMArchSpecificLocations(const CallInst *SM) const;
 };
 
 //===--------------------------------------------------------------------===//

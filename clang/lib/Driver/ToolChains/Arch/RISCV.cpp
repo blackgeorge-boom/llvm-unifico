@@ -191,9 +191,16 @@ static void getExtensionFeatures(const Driver &D,
 
 void riscv::getRISCVTargetFeatures(const Driver &D, const ArgList &Args,
                                    std::vector<StringRef> &Features) {
-  if (const Arg *A = Args.getLastArg(options::OPT_march_EQ)) {
-    StringRef MArch = A->getValue();
+  const Arg *A = Args.getLastArg(options::OPT_march_EQ);
+  StringRef MArch;
 
+  // POPCORN: set the default architecture to rc64g
+  if (A)
+    MArch = A->getValue();
+  else
+    MArch = "rv64g";
+
+  if (MArch != "") {
     // RISC-V ISA strings must be lowercase.
     if (llvm::any_of(MArch, [](char c) { return isupper(c); })) {
       D.Diag(diag::err_drv_invalid_riscv_arch_name)
@@ -352,8 +359,8 @@ void riscv::getRISCVTargetFeatures(const Driver &D, const ArgList &Args,
     getExtensionFeatures(D, Args, Features, MArch, OtherExts);
   }
 
-  // -mrelax is default, unless -mno-relax is specified.
-  if (Args.hasFlag(options::OPT_mrelax, options::OPT_mno_relax, true))
+  // -mno-relax is default, unless -mrelax is specified.
+  if (Args.hasFlag(options::OPT_mrelax, options::OPT_mno_relax, false))
     Features.push_back("+relax");
   else
     Features.push_back("-relax");
@@ -375,5 +382,6 @@ StringRef riscv::getRISCVABI(const ArgList &Args, const llvm::Triple &Triple) {
   if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ))
     return A->getValue();
 
-  return Triple.getArch() == llvm::Triple::riscv32 ? "ilp32" : "lp64";
+  // POPCORN: default to lp64d
+  return Triple.getArch() == llvm::Triple::riscv32 ? "ilp32" : "lp64d";
 }

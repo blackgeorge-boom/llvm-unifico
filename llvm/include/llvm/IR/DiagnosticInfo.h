@@ -65,6 +65,7 @@ enum DiagnosticKind {
   DK_OptimizationRemarkAnalysisFPCommute,
   DK_OptimizationRemarkAnalysisAliasing,
   DK_OptimizationFailure,
+  DK_OptimizationError,
   DK_FirstRemark = DK_OptimizationRemark,
   DK_LastRemark = DK_OptimizationFailure,
   DK_MachineOptimizationRemark,
@@ -521,6 +522,29 @@ protected:
   /// the optimization records and not in the remark printed in the compiler
   /// output.
   int FirstExtraArgIndex = -1;
+};
+
+/// Diagnostic information for show-stopping failures.
+class DiagnosticInfoOptimizationError
+    : public DiagnosticInfoOptimizationBase {
+public:
+  /// \p Fn is the function where the diagnostic is being emitted. \p DLoc is
+  /// the location information to use in the diagnostic. If line table
+  /// information is available, the diagnostic will include the source code
+  /// location. \p Msg is the message to show. Note that this class does not
+  /// copy this message, so this reference must be valid for the whole life time
+  /// of the diagnostic.
+  DiagnosticInfoOptimizationError(const Function &Fn, const DebugLoc &DLoc,
+                                  const StringRef &Msg)
+      : DiagnosticInfoOptimizationBase(DK_OptimizationError, DS_Error,
+                                       nullptr, Msg, Fn, DLoc) {}
+
+  static bool classof(const DiagnosticInfo *DI) {
+    return DI->getKind() == DK_OptimizationError;
+  }
+
+  /// \see DiagnosticInfoOptimizationBase::isEnabled.
+  bool isEnabled() const override;
 };
 
 /// Allow the insertion operator to return the actual remark type rather than a

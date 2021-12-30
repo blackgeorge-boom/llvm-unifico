@@ -1043,6 +1043,15 @@ void X86AsmPrinter::LowerSTACKMAP(const MachineInstr &MI) {
   SMShadowTracker.reset(NumShadowBytes);
 }
 
+// Lower a stackmap of the form:
+// <id>, <shadowBytes>, ...
+void X86AsmPrinter::LowerPCN_STACKMAP(const MachineInstr &MI) {
+  SMShadowTracker.emitShadowPadding(*OutStreamer, getSubtargetInfo());
+  PSM.recordPcnStackMap(MI);
+  unsigned NumShadowBytes = MI.getOperand(1).getImm();
+  SMShadowTracker.reset(NumShadowBytes);
+}
+
 // Lower a patchpoint of the form:
 // [<def>], <id>, <numBytes>, <target>, <numArgs>, <cc>, ...
 void X86AsmPrinter::LowerPATCHPOINT(const MachineInstr &MI,
@@ -1846,6 +1855,9 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
 
   case TargetOpcode::STACKMAP:
     return LowerSTACKMAP(*MI);
+
+  case TargetOpcode::PCN_STACKMAP:
+    return LowerPCN_STACKMAP(*MI);
 
   case TargetOpcode::PATCHPOINT:
     return LowerPATCHPOINT(*MI, MCInstLowering);

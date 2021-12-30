@@ -283,6 +283,9 @@ public:
   /// Set of sanitizer checks that trap rather than diagnose.
   SanitizerSet SanitizeTrap;
 
+  /// Targets for which to emit object code
+  std::vector<std::string> PopcornTargets;
+
   /// List of backend command-line options for -fembed-bitcode.
   std::vector<uint8_t> CmdArgs;
 

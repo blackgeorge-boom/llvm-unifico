@@ -535,6 +535,7 @@ enum OpenMPSchedType {
   OMP_sch_guided_chunked = 36,
   OMP_sch_runtime = 37,
   OMP_sch_auto = 38,
+  OMP_sch_hetprobe = 39,
   /// static with chunk adjustment (e.g., simd)
   OMP_sch_static_balanced_chunked = 45,
   /// Lower bound for 'ordered' versions.
@@ -3425,6 +3426,8 @@ static OpenMPSchedType getRuntimeSchedule(OpenMPScheduleClauseKind ScheduleKind,
     return Ordered ? OMP_ord_runtime : OMP_sch_runtime;
   case OMPC_SCHEDULE_auto:
     return Ordered ? OMP_ord_auto : OMP_sch_auto;
+  case OMPC_SCHEDULE_hetprobe:
+    return OMP_sch_hetprobe;
   case OMPC_SCHEDULE_unknown:
     assert(!Chunked && "chunk was specified but schedule kind not known");
     return Ordered ? OMP_ord_static : OMP_sch_static;

@@ -470,7 +470,8 @@ static MachineInstr *foldPatchpoint(MachineFunction &MF, MachineInstr &MI,
                                     const TargetInstrInfo &TII) {
   unsigned StartIdx = 0;
   switch (MI.getOpcode()) {
-  case TargetOpcode::STACKMAP: {
+  case TargetOpcode::STACKMAP:
+  case TargetOpcode::PCN_STACKMAP: {
     // StackMapLiveValues are foldable
     StartIdx = StackMapOpers(&MI).getVarIdx();
     break;
@@ -570,7 +571,8 @@ MachineInstr *TargetInstrInfo::foldMemoryOperand(MachineInstr &MI,
 
   if (MI.getOpcode() == TargetOpcode::STACKMAP ||
       MI.getOpcode() == TargetOpcode::PATCHPOINT ||
-      MI.getOpcode() == TargetOpcode::STATEPOINT) {
+      MI.getOpcode() == TargetOpcode::STATEPOINT ||
+      MI.getOpcode() == TargetOpcode::PCN_STACKMAP) {
     // Fold stackmap/patchpoint.
     NewMI = foldPatchpoint(MF, MI, Ops, FI, *this);
     if (NewMI)
@@ -635,7 +637,8 @@ MachineInstr *TargetInstrInfo::foldMemoryOperand(MachineInstr &MI,
 
   if ((MI.getOpcode() == TargetOpcode::STACKMAP ||
        MI.getOpcode() == TargetOpcode::PATCHPOINT ||
-       MI.getOpcode() == TargetOpcode::STATEPOINT) &&
+       MI.getOpcode() == TargetOpcode::STATEPOINT ||
+       MI.getOpcode() == TargetOpcode::PCN_STACKMAP) &&
       isLoadFromStackSlot(LoadMI, FrameIndex)) {
     // Fold stackmap/patchpoint.
     NewMI = foldPatchpoint(MF, MI, Ops, FrameIndex, *this);

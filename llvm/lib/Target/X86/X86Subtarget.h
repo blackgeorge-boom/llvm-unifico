@@ -17,6 +17,7 @@
 #include "X86ISelLowering.h"
 #include "X86InstrInfo.h"
 #include "X86SelectionDAGInfo.h"
+#include "X86Values.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/CodeGen/GlobalISel/CallLowering.h"
@@ -485,6 +486,8 @@ private:
   X86TargetLowering TLInfo;
   X86FrameLowering FrameLowering;
 
+  X86Values VGen;
+
 public:
   /// This constructor initializes the data members to match that
   /// of the specified triple.
@@ -511,6 +514,7 @@ public:
   const X86RegisterInfo *getRegisterInfo() const override {
     return &getInstrInfo()->getRegisterInfo();
   }
+  const X86Values *getValues() const override { return &VGen; }
 
   /// Returns the minimum alignment known to hold of the
   /// stack frame on entry to the function and which must be maintained by every

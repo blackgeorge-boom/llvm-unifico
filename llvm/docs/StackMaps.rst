@@ -336,16 +336,20 @@ format of this section follows:
   }
   StkMapRecord[NumRecords] {
     uint64 : PatchPoint ID
+    uint32 : Index of Function Record
     uint32 : Instruction Offset
     uint16 : Reserved (record flags)
     uint16 : NumLocations
     Location[NumLocations] {
-      uint8  : Register | Direct | Indirect | Constant | ConstantIndex
-      uint8  : Reserved (expected to be 0)
-      uint16 : Location Size
-      uint16 : Dwarf RegNum
-      uint16 : Reserved (expected to be 0)
-      int32  : Offset or SmallConstant
+      uint8 (4 bits) : Register | Direct | Indirect | Constant | ConstantIndex
+      uint8 (1 bit)  : Is it a pointer?
+      uint8 (1 bit)  : Is it an alloca?
+      uint8 (1 bit)  : Is it a duplicate record for the same live value?
+      uint8 (1 bit)  : Is it a temporary value created for the stackmap?
+      uint8          : Size in Bytes
+      uint16         : Dwarf RegNum
+      int32          : Offset or SmallConstant
+      uint32         : Size of pointed-to alloca data
     }
     uint32 : Padding (only if required to align to 8 byte)
     uint16 : Padding
@@ -354,6 +358,25 @@ format of this section follows:
       uint16 : Dwarf RegNum
       uint8  : Reserved
       uint8  : Size in Bytes
+    }
+    uint16 : Padding
+    uint16 : NumArchValues
+    ArchValues[NumArchValues] {
+      Location {
+        uint8 (4 bits) : Register | Indirect
+        uint8 (3 bits) : Padding
+        uint8 (1 bit)  : Is it a pointer?
+        uint8          : Size in Bytes
+        uint16         : Dwarf RegNum
+        int32          : Offset
+      }
+      Value {
+        uint8_t (4 bits) : Instruction
+        uint8_t (4 bits) : Register | Direct | Constant
+        uint8_t          : Size
+        uint16_t         : Dwarf RegNum
+        int64_t          : Offset or Constant
+      }
     }
     uint32 : Padding (only if required to align to 8 byte)
   }

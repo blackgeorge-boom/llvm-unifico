@@ -119,6 +119,19 @@ ModulePass *createStripNonLineTableDebugInfoPass();
 // number of conditional branches in the hot paths based on profiles.
 //
 FunctionPass *createControlHeightReductionLegacyPass();
+
+//===----------------------------------------------------------------------===//
+//
+// NameStringLiterals - Give symbol names to anonymous string literals so they
+// can be aligned at link-time
+//
+ModulePass *createNameStringLiteralsPass();
+
+//===----------------------------------------------------------------------===//
+//
+// StaticVarSections - Put static global variables into their own sections
+//
+ModulePass *createStaticVarSectionsPass();
 }
 
 #endif
