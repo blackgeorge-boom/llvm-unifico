@@ -85,8 +85,8 @@ MCSectionMachO::MCSectionMachO(StringRef Segment, StringRef Section,
                                MCSymbol *Begin)
     : MCSection(SV_MachO, K, Begin), TypeAndAttributes(TAA),
       Reserved2(reserved2) {
-  assert(Segment.size() <= 16 && Section.size() <= 16 &&
-         "Segment or section string too long");
+  //assert(Segment.size() <= 16 && Section.size() <= 16 &&
+  //       "Segment or section string too long");
   for (unsigned i = 0; i != 16; ++i) {
     if (i < Segment.size())
       SegmentName[i] = Segment[i];
