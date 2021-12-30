@@ -262,6 +262,23 @@ struct PragmaAttributeHandler : public PragmaHandler {
   ParsedAttributes AttributesForPragmaAttribute;
 };
 
+struct PragmaNoPopcornHandler: public PragmaHandler {
+  PragmaNoPopcornHandler() : PragmaHandler("popcorn") {}
+  void HandlePragma(Preprocessor &PP,  PragmaIntroducer Introducer,
+                    Token &FirstToken) override;
+};
+
+struct PragmaPopcornHandler : public PragmaHandler {
+  enum Type {
+    Prefetch, // Prefetch for the statement following the pragma
+    None      // Unknown pragma type
+  };
+
+  PragmaPopcornHandler() : PragmaHandler("popcorn") {}
+  void HandlePragma(Preprocessor &PP, PragmaIntroducer Introducer,
+                    Token &FirstToken) override;
+};
+
 }  // end namespace
 
 void Parser::initializePragmaHandlers() {
@@ -382,6 +399,12 @@ void Parser::initializePragmaHandlers() {
   AttributePragmaHandler =
       llvm::make_unique<PragmaAttributeHandler>(AttrFactory);
   PP.AddPragmaHandler("clang", AttributePragmaHandler.get());
+
+  if (getLangOpts().DistributedOmp)
+    PopcornHandler.reset(new PragmaPopcornHandler());
+  else
+    PopcornHandler.reset(new PragmaNoPopcornHandler());
+  PP.AddPragmaHandler(PopcornHandler.get());
 }
 
 void Parser::resetPragmaHandlers() {
@@ -487,6 +510,9 @@ void Parser::resetPragmaHandlers() {
 
   PP.RemovePragmaHandler("clang", AttributePragmaHandler.get());
   AttributePragmaHandler.reset();
+
+  PP.RemovePragmaHandler(PopcornHandler.get());
+  PopcornHandler.reset();
 }
 
 /// Handle the annotation token produced for #pragma unused(...)
@@ -1576,6 +1602,109 @@ void Parser::HandlePragmaAttribute() {
                                         std::move(SubjectMatchRules));
 }
 
+enum PopcornClauseKind {
+  PC_PrefetchIgnore, // Ignore array/pointer variable during prefetch analysis
+  PC_Unknown         // Unknown clause type
+};
+
+static const char *getPopcornClauseName(enum PopcornClauseKind K) {
+  switch(K) {
+  default: return "unknown";
+  case PC_PrefetchIgnore: return "ignore";
+  }
+}
+
+static enum PopcornClauseKind getPopcornClauseKind(llvm::StringRef Name) {
+  return llvm::StringSwitch<PopcornClauseKind>(Name)
+    .Case("ignore", PC_PrefetchIgnore)
+    .Default(PC_Unknown);
+}
+
+void Parser::ParseVarList(llvm::SmallPtrSet<VarDecl *, 4> &Vars) {
+  bool isComma = false;
+  DeclRefExpr *D;
+  VarDecl *VD;
+
+  while(isComma || (Tok.isNot(tok::r_paren) &&
+                    Tok.isNot(tok::annot_pragma_popcorn_prefetch_end))) {
+    // Parse variable
+    ExprResult VarExpr =
+      Actions.CorrectDelayedTyposInExpr(ParseAssignmentExpression());
+
+    if(VarExpr.isUsable()) {
+      Expr *E = VarExpr.get();
+      if((D = dyn_cast<DeclRefExpr>(E)) &&
+         (VD = dyn_cast<VarDecl>(D->getDecl())))
+        Vars.insert(VD);
+      else {
+        PP.Diag(Tok.getLocation(), diag::err_pragma_popcorn_expected_var_name);
+        SkipUntil(tok::comma, tok::r_paren,
+                  tok::annot_pragma_popcorn_prefetch_end);
+      }
+    }
+
+    // Parse ',' if any
+    isComma = Tok.is(tok::comma);
+    if(isComma) ConsumeToken();
+  }
+}
+
+StmtResult Parser::HandlePragmaPopcorn() {
+  llvm::SmallPtrSet<VarDecl *, 4> Ignore;
+
+  assert(Tok.is(tok::annot_pragma_popcorn_prefetch));
+  ConsumeToken(); // The annotation token.
+
+  while(Tok.isNot(tok::annot_pragma_popcorn_prefetch_end)) {
+    // Parse clause type.
+    enum PopcornClauseKind Kind = getPopcornClauseKind(PP.getSpelling(Tok));
+    if(Kind == PC_Unknown) {
+      PP.Diag(Tok.getLocation(),
+              diag::err_pragma_popcorn_invalid_clause) << PP.getSpelling(Tok);
+      SkipUntil(tok::r_paren, tok::annot_pragma_popcorn_prefetch_end,
+                Parser::StopBeforeMatch);
+      continue;
+    }
+    ConsumeToken();
+
+    // Parse '('.
+    BalancedDelimiterTracker T(*this, tok::l_paren,
+                               tok::annot_pragma_popcorn_prefetch_end);
+    if(T.expectAndConsume(diag::err_expected_lparen_after,
+                          getPopcornClauseName(Kind)))
+      return StmtError();
+
+    switch(Kind) {
+    default: llvm_unreachable("Unknown '#pragma popcorn' clause type"); break;
+    case PC_PrefetchIgnore: ParseVarList(Ignore); break;
+    }
+
+    // Parse ')'.
+    T.consumeClose();
+  }
+  ConsumeToken(); // Consume final token.
+
+  StmtResult R = ParseStatement();
+
+  if(R.isInvalid()) return StmtError();
+  else if(isa<ForStmt>(R.get())) {
+    ASTContext &Ctx = getActions().getASTContext();
+    ForStmt *S = cast<ForStmt>(R.get());
+    S->setPrefetchEnabled(true);
+    PrefetchAnalysis PA(&Ctx, R.get());
+    PA.ignoreVars(Ignore);
+    PA.analyzeStmt();
+    PA.calculatePrefetchRanges();
+    // TODO remove
+    PA.dump();
+    Ctx.addPrefetchAnalysis(R.get(), PA);
+  }
+  else PP.Diag(Tok.getLocation(),
+               diag::warn_pragma_popcorn_prefetch_invalid_stmt);
+
+  return R;
+}
+
 // #pragma GCC visibility comes in two variants:
 //   'push' '(' [visibility] ')'
 //   'pop'
@@ -2199,10 +2328,10 @@ void PragmaOpenCLExtensionHandler::HandlePragma(Preprocessor &PP,
 void PragmaNoOpenMPHandler::HandlePragma(Preprocessor &PP,
                                          PragmaIntroducer Introducer,
                                          Token &FirstTok) {
-  if (!PP.getDiagnostics().isIgnored(diag::warn_pragma_omp_ignored,
+  if (!PP.getDiagnostics().isIgnored(diag::warn_pragma_popcorn_ignored,
                                      FirstTok.getLocation())) {
-    PP.Diag(FirstTok, diag::warn_pragma_omp_ignored);
-    PP.getDiagnostics().setSeverity(diag::warn_pragma_omp_ignored,
+    PP.Diag(FirstTok, diag::warn_pragma_popcorn_ignored);
+    PP.getDiagnostics().setSeverity(diag::warn_pragma_popcorn_ignored,
                                     diag::Severity::Ignored, SourceLocation());
   }
   PP.DiscardUntilEndOfDirective();
@@ -3279,3 +3408,66 @@ void PragmaAttributeHandler::HandlePragma(Preprocessor &PP,
   PP.EnterTokenStream(std::move(TokenArray), 1,
                       /*DisableMacroExpansion=*/false, /*IsReinject=*/false);
 }
+
+void PragmaNoPopcornHandler::HandlePragma(Preprocessor &PP,
+                                          PragmaIntroducer Introducer,
+                                          Token &Tok) {
+  if (!PP.getDiagnostics().isIgnored(diag::warn_pragma_omp_ignored,
+                                     Tok.getLocation())) {
+    PP.Diag(Tok, diag::warn_pragma_omp_ignored);
+    PP.getDiagnostics().setSeverity(diag::warn_pragma_omp_ignored,
+                                    diag::Severity::Ignored, SourceLocation());
+  }
+  PP.DiscardUntilEndOfDirective();
+}
+
+void PragmaPopcornHandler::HandlePragma(Preprocessor &PP,
+                                        PragmaIntroducer Introducer,
+                                        Token &Tok) {
+  // Incoming token is "popcorn" for "#pragma popcorn".
+  PP.Lex(Tok);
+  if (Tok.isNot(tok::identifier)) {
+    PP.Diag(Tok.getLocation(), diag::warn_pragma_popcorn_no_arg);
+    return;
+  }
+
+  IdentifierInfo *OptionInfo = Tok.getIdentifierInfo();
+  enum PragmaPopcornHandler::Type Ty =
+    llvm::StringSwitch<enum PragmaPopcornHandler::Type>(OptionInfo->getName())
+                             .Case("prefetch", PragmaPopcornHandler::Prefetch)
+                             .Default(PragmaPopcornHandler::None);
+  if (Ty == PragmaPopcornHandler::None) {
+    PP.Diag(Tok.getLocation(), diag::warn_pragma_popcorn_invalid_option)
+        << OptionInfo->getName();
+    return;
+  }
+
+  switch(Ty) {
+  default: llvm_unreachable("Should have weeded out invalid types"); break;
+  case PragmaPopcornHandler::Prefetch: {
+    // Capture all tokens to be included for prefetching analysis.
+    SmallVector<Token, 16> Pragma;
+    Token NextTok;
+
+    NextTok.startToken();
+    NextTok.setKind(tok::annot_pragma_popcorn_prefetch);
+    NextTok.setLocation(Tok.getLocation());
+    while (NextTok.isNot(tok::eod)) {
+      Pragma.push_back(NextTok);
+      PP.Lex(NextTok);
+    }
+    SourceLocation EodLoc = NextTok.getLocation();
+    NextTok.startToken();
+    NextTok.setKind(tok::annot_pragma_popcorn_prefetch_end);
+    NextTok.setLocation(EodLoc);
+    Pragma.push_back(NextTok);
+
+    auto Toks = llvm::make_unique<Token[]>(Pragma.size());
+    std::copy(Pragma.begin(), Pragma.end(), Toks.get());
+    PP.EnterTokenStream(std::move(Toks), Pragma.size(),
+                        /*DisableMacroExpansion=*/false, /*OwnsTokens=*/true);
+    break;
+  }
+  }
+}
+

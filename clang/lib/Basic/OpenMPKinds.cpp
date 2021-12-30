@@ -145,6 +145,11 @@ unsigned clang::getOpenMPSimpleClauseType(OpenMPClauseKind Kind,
   .Case(#Name, OMPC_ATOMIC_DEFAULT_MEM_ORDER_##Name)
 #include "clang/Basic/OpenMPKinds.def"
         .Default(OMPC_ATOMIC_DEFAULT_MEM_ORDER_unknown);
+  case OMPC_prefetch:
+    return llvm::StringSwitch<OpenMPPrefetchClauseKind>(Str)
+#define OPENMP_PREFETCH_KIND(Name) .Case(#Name, OMPC_PREFETCH_##Name)
+#include "clang/Basic/OpenMPKinds.def"
+        .Default(OMPC_PREFETCH_unknown);
   case OMPC_unknown:
   case OMPC_threadprivate:
   case OMPC_if:
@@ -375,6 +380,7 @@ const char *clang::getOpenMPSimpleClauseTypeName(OpenMPClauseKind Kind,
   case OMPC_unified_shared_memory:
   case OMPC_reverse_offload:
   case OMPC_dynamic_allocators:
+  case OMPC_prefetch:
     break;
   }
   llvm_unreachable("Invalid OpenMP simple clause kind");

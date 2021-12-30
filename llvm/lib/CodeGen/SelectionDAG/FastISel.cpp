@@ -787,7 +787,7 @@ bool FastISel::addStackMapLiveVars(SmallVectorImpl<MachineOperand> &Ops,
   return true;
 }
 
-bool FastISel::selectStackmap(const CallInst *I) {
+bool FastISel::selectStackmap(const CallInst *I, unsigned id) {
   // void @llvm.experimental.stackmap(i64 <id>, i32 <numShadowBytes>,
   //                                  [live variables...])
   assert(I->getCalledFunction()->getReturnType()->isVoidTy() &&
@@ -804,6 +804,8 @@ bool FastISel::selectStackmap(const CallInst *I) {
   // CALLSEQ_END(0, 0)
   //
   SmallVector<MachineOperand, 32> Ops;
+  unsigned Opcode = id == Intrinsic::experimental_stackmap
+    ? TargetOpcode::STACKMAP : TargetOpcode::PCN_STACKMAP;
 
   // Add the <id> and <numBytes> constants.
   assert(isa<ConstantInt>(I->getOperand(PatchPointOpers::IDPos)) &&
@@ -843,7 +845,7 @@ bool FastISel::selectStackmap(const CallInst *I) {
 
   // Issue STACKMAP.
   MachineInstrBuilder MIB = BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc,
-                                    TII.get(TargetOpcode::STACKMAP));
+                                    TII.get(Opcode));
   for (auto const &MO : Ops)
     MIB.add(MO);
 
@@ -854,7 +856,10 @@ bool FastISel::selectStackmap(const CallInst *I) {
       .addImm(0);
 
   // Inform the Frame Information that we have a stackmap in this function.
-  FuncInfo.MF->getFrameInfo().setHasStackMap();
+  if (id == Intrinsic::experimental_stackmap)
+    FuncInfo.MF->getFrameInfo().setHasStackMap();
+  else
+    FuncInfo.MF->getFrameInfo().setHasPcnStackMap();
 
   return true;
 }
@@ -1480,7 +1485,8 @@ bool FastISel::selectIntrinsicCall(const IntrinsicInst *II) {
     return true;
   }
   case Intrinsic::experimental_stackmap:
-    return selectStackmap(II);
+  case Intrinsic::experimental_pcn_stackmap:
+    return selectStackmap(II, II->getIntrinsicID());
   case Intrinsic::experimental_patchpoint_void:
   case Intrinsic::experimental_patchpoint_i64:
     return selectPatchpoint(II);

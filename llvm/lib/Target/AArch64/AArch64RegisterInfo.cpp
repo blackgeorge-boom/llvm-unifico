@@ -285,6 +285,23 @@ AArch64RegisterInfo::getFrameRegister(const MachineFunction &MF) const {
   return TFI->hasFP(MF) ? AArch64::FP : AArch64::SP;
 }
 
+int AArch64RegisterInfo::getReturnAddrLoc(const MachineFunction &MF,
+                                          unsigned &BaseReg) const {
+  const TargetFrameLowering *TFL = MF.getSubtarget().getFrameLowering();
+  const MachineFrameInfo *MFI = &MF.getFrameInfo();
+  assert(MFI->isCalleeSavedInfoValid() && "No callee-saved information");
+  const std::vector<CalleeSavedInfo> &CSI = MFI->getCalleeSavedInfo();
+
+  // The return address' location is the the link register's spill slot
+  for(unsigned i = 0, e = CSI.size(); i < e; i++)
+    if(CSI[i].getReg() == AArch64::LR)
+      return TFL->getFrameIndexReference(MF, CSI[i].getFrameIdx(), BaseReg);
+
+  // We didn't find it, is it actually saved?
+  BaseReg = 0;
+  return INT32_MAX;
+}
+
 bool AArch64RegisterInfo::requiresRegisterScavenging(
     const MachineFunction &MF) const {
   return true;
@@ -451,7 +468,8 @@ void AArch64RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   // Special handling of dbg_value, stackmap and patchpoint instructions.
   if (MI.isDebugValue() || MI.getOpcode() == TargetOpcode::STACKMAP ||
-      MI.getOpcode() == TargetOpcode::PATCHPOINT) {
+      MI.getOpcode() == TargetOpcode::PATCHPOINT ||
+      MI.getOpcode() == TargetOpcode::PCN_STACKMAP) {
     Offset = TFI->resolveFrameIndexReference(MF, FrameIndex, FrameReg,
                                              /*PreferFP=*/true,
                                              /*ForSimm=*/false);

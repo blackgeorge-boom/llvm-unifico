@@ -1161,6 +1161,9 @@ bool DAGTypeLegalizer::PromoteIntegerOperand(SDNode *N, unsigned OpNo) {
   case ISD::VECREDUCE_SMIN:
   case ISD::VECREDUCE_UMAX:
   case ISD::VECREDUCE_UMIN: Res = PromoteIntOp_VECREDUCE(N); break;
+
+  case (uint16_t)~TargetOpcode::PCN_STACKMAP:
+    Res = PromoteIntOp_STACKMAP(N, OpNo); break;
   }
 
   // If the result is null, the sub-method took care of registering results etc.
@@ -1395,6 +1398,30 @@ SDValue DAGTypeLegalizer::PromoteIntOp_SIGN_EXTEND(SDNode *N) {
 SDValue DAGTypeLegalizer::PromoteIntOp_SINT_TO_FP(SDNode *N) {
   return SDValue(DAG.UpdateNodeOperands(N,
                                 SExtPromotedInteger(N->getOperand(0))), 0);
+}
+
+SDValue DAGTypeLegalizer::PromoteIntOp_STACKMAP(SDNode *N, unsigned OpNo) {
+  std::vector<SDValue> Ops(N->getNumOperands());
+  SDLoc dl(N);
+
+  for(unsigned i = 0; i < N->getNumOperands(); i++) {
+    if(i == OpNo) {
+      EVT NVT = TLI.getTypeToTransformTo(*DAG.getContext(),
+					 N->getOperand(OpNo)->getValueType(0));
+      if(N->getOperand(i).getValueType() == MVT::i1 ||
+         N->getOperand(i).getValueType() == MVT::i8 ||
+         N->getOperand(i).getValueType() == MVT::i16 ||
+	 N->getOperand(i).getValueType() == MVT::i32) {
+        if(N->getOperand(i).getOpcode() == ISD::TRUNCATE)
+          Ops[i] = N->getOperand(i)->getOperand(0);
+        else
+          Ops[i] = DAG.getNode(ISD::ZERO_EXTEND, dl, NVT, N->getOperand(i));
+      }
+    }
+    else Ops[i] = N->getOperand(i);
+  }
+
+  return SDValue(DAG.UpdateNodeOperands(N, Ops), 0);
 }
 
 SDValue DAGTypeLegalizer::PromoteIntOp_STORE(StoreSDNode *N, unsigned OpNo){
@@ -3499,6 +3526,9 @@ bool DAGTypeLegalizer::ExpandIntegerOperand(SDNode *N, unsigned OpNo) {
   case ISD::FRAMEADDR:         Res = ExpandIntOp_RETURNADDR(N); break;
 
   case ISD::ATOMIC_STORE:      Res = ExpandIntOp_ATOMIC_STORE(N); break;
+
+  case (uint16_t)~TargetOpcode::PCN_STACKMAP:
+    Res = ExpandIntOp_STACKMAP(N, OpNo); break;
   }
 
   // If the result is null, the sub-method took care of registering results etc.
@@ -3937,6 +3967,36 @@ SDValue DAGTypeLegalizer::ExpandIntOp_ATOMIC_STORE(SDNode *N) {
   return Swap.getValue(1);
 }
 
+SDValue DAGTypeLegalizer::ExpandIntOp_STACKMAP(SDNode *N, unsigned OpNo) {
+  std::vector<SDValue> Ops;
+  SDLoc dl(N);
+  const SDValue &InvOp = N->getOperand(OpNo);
+
+  switch(InvOp.getSimpleValueType().SimpleTy) {
+  default: llvm_unreachable("Unhandled operand type in stackmap");
+  case MVT::i128:
+    if(InvOp->getOpcode() == ISD::BUILD_PAIR) {
+      // If the i128 is the result of a buildpair i64, i64, replace the i128
+      // operand with the two i64 operands in the stackmap
+      LLVM_DEBUG(dbgs() << "Stackmap: replacing i128 operand with i64 pair\n");
+
+      Ops.reserve(N->getNumOperands() + 1);
+      for(unsigned i = 0; i < N->getNumOperands(); i++) {
+        if(i == OpNo) {
+          Ops.push_back(InvOp->getOperand(0));
+          Ops.push_back(InvOp->getOperand(1));
+        }
+        else Ops.push_back(N->getOperand(i));
+      }
+
+      int64_t SMID = cast<ConstantSDNode>(N->getOperand(0))->getSExtValue();
+      DAG.getMachineFunction().addOpLegalizeChange(SMID, OpNo, 2);
+    }
+    break;
+  }
+
+  return SDValue(DAG.MorphNodeTo(N, N->getOpcode(), N->getVTList(), Ops), 0);
+}
 
 SDValue DAGTypeLegalizer::PromoteIntRes_EXTRACT_SUBVECTOR(SDNode *N) {
 

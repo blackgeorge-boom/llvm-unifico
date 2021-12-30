@@ -16,6 +16,7 @@
 #include "RISCVFrameLowering.h"
 #include "RISCVISelLowering.h"
 #include "RISCVInstrInfo.h"
+#include "RISCVValues.h"
 #include "Utils/RISCVBaseInfo.h"
 #include "llvm/CodeGen/SelectionDAGTargetInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
@@ -45,6 +46,7 @@ class RISCVSubtarget : public RISCVGenSubtargetInfo {
   RISCVInstrInfo InstrInfo;
   RISCVRegisterInfo RegInfo;
   RISCVTargetLowering TLInfo;
+  RISCVValues VGen;
   SelectionDAGTargetInfo TSInfo;
 
   /// Initializes using the passed in CPU and feature strings so that we can
@@ -74,6 +76,9 @@ public:
   }
   const SelectionDAGTargetInfo *getSelectionDAGInfo() const override {
     return &TSInfo;
+  }
+  const RISCVValues *getValues() const override {
+    return &VGen;
   }
   bool hasStdExtM() const { return HasStdExtM; }
   bool hasStdExtA() const { return HasStdExtA; }

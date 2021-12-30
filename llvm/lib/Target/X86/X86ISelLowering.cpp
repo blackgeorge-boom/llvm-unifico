@@ -27301,6 +27301,9 @@ SDValue X86TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   case ISD::GC_TRANSITION_START:
                                 return LowerGC_TRANSITION_START(Op, DAG);
   case ISD::GC_TRANSITION_END:  return LowerGC_TRANSITION_END(Op, DAG);
+  case (uint16_t)~TargetOpcode::STACKMAP:
+  case (uint16_t)~TargetOpcode::PCN_STACKMAP:
+    return SDValue(); // Use generic stackmap type legalizer
   }
 }
 
@@ -31008,6 +31011,7 @@ X86TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
     return emitPatchPoint(MI, BB);
 
   case TargetOpcode::STACKMAP:
+  case TargetOpcode::PCN_STACKMAP:
   case TargetOpcode::PATCHPOINT:
     return emitPatchPoint(MI, BB);
 

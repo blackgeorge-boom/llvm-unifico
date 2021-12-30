@@ -89,6 +89,11 @@ protected: // Can only create subclasses.
   CodeModel::Model CMModel = CodeModel::Small;
   CodeGenOpt::Level OptLevel = CodeGenOpt::Default;
 
+  /// ArchIROptLevel - Optimization level (architecture-specific IR
+  /// optimizations only).  Defaults to OptLevel.
+  ///
+  CodeGenOpt::Level ArchIROptLevel = CodeGenOpt::Default;
+
   /// Contains target specific asm information.
   std::unique_ptr<const MCAsmInfo> AsmInfo;
   std::unique_ptr<const MCRegisterInfo> MRI;
@@ -221,9 +226,12 @@ public:
   /// Returns the optimization level: None, Less, Default, or Aggressive.
   CodeGenOpt::Level getOptLevel() const;
 
+  CodeGenOpt::Level getArchIROptLevel() const { return ArchIROptLevel; }
+
   /// Overrides the optimization level.
   void setOptLevel(CodeGenOpt::Level Level);
 
+  void setArchIROptLevel(CodeGenOpt::Level Level) { ArchIROptLevel = Level; }
   void setFastISel(bool Enable) { Options.EnableFastISel = Enable; }
   bool getO0WantsFastISel() { return O0WantsFastISel; }
   void setO0WantsFastISel(bool Enable) { O0WantsFastISel = Enable; }

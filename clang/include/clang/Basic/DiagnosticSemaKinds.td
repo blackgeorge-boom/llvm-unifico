@@ -9290,6 +9290,10 @@ def err_omp_wrong_dependency_iterator_type : Error<
   "expected an integer or a pointer type of the outer loop counter '%0' for non-rectangular nests">;
 def err_omp_unsupported_type : Error <
   "host requires %0 bit size %1 type support, but device '%2' does not support it">;
+def err_omp_invalid_prefetch_var_type : Error<
+  "invalid variable type; must be %0 type">;
+def err_omp_invalid_prefetch_range_type : Error<
+  "invalid range specifier type; must be of integer (signed or unsigned) type">;
 } // end of OpenMP category
 
 let CategoryName = "Related Result Type Issue" in {

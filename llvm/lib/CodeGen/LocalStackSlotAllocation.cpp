@@ -306,7 +306,8 @@ bool LocalStackSlotPass::insertFrameReferenceRegisters(MachineFunction &Fn) {
       // range, so they don't need any updates.
       if (MI.isDebugInstr() || MI.getOpcode() == TargetOpcode::STATEPOINT ||
           MI.getOpcode() == TargetOpcode::STACKMAP ||
-          MI.getOpcode() == TargetOpcode::PATCHPOINT)
+          MI.getOpcode() == TargetOpcode::PATCHPOINT ||
+	  MI.getOpcode() == TargetOpcode::PCN_STACKMAP)
         continue;
 
       // For now, allocate the base register(s) within the basic block

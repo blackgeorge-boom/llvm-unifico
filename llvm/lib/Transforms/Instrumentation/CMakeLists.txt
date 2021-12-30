@@ -4,12 +4,15 @@ add_llvm_library(LLVMInstrumentation
   CGProfile.cpp
   ControlHeightReduction.cpp
   DataFlowSanitizer.cpp
+  MigrationPoints.cpp
   GCOVProfiling.cpp
   MemorySanitizer.cpp
+  InsertStackMaps.cpp
   IndirectCallPromotion.cpp
   Instrumentation.cpp
   InstrOrderFile.cpp
   InstrProfiling.cpp
+  LibcStackMaps.cpp
   PGOInstrumentation.cpp
   PGOMemOPSizeOpt.cpp
   PoisonChecking.cpp

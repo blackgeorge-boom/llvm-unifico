@@ -88,7 +88,7 @@ bool X86FrameLowering::hasFP(const MachineFunction &MF) const {
           MFI.isFrameAddressTaken() || MFI.hasOpaqueSPAdjustment() ||
           MF.getInfo<X86MachineFunctionInfo>()->getForceFramePointer() ||
           MF.callsUnwindInit() || MF.hasEHFunclets() || MF.callsEHReturn() ||
-          MFI.hasStackMap() || MFI.hasPatchPoint() ||
+          MFI.hasStackMap() || MFI.hasPatchPoint() || MFI.hasPcnStackMap() ||
           MFI.hasCopyImplyingStackAdjustment());
 }
 

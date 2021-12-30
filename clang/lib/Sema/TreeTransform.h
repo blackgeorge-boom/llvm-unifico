@@ -9168,6 +9168,14 @@ TreeTransform<Derived>::TransformOMPIsDevicePtrClause(OMPIsDevicePtrClause *C) {
   return getDerived().RebuildOMPIsDevicePtrClause(Vars, Locs);
 }
 
+template <typename Derived>
+OMPClause *
+TreeTransform<Derived>::TransformOMPPrefetchClause(OMPPrefetchClause *C) {
+  // TODO Rob
+  llvm_unreachable("not yet implmented");
+  return C;
+}
+
 //===----------------------------------------------------------------------===//
 // Expression transformation
 //===----------------------------------------------------------------------===//

@@ -759,7 +759,8 @@ X86RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   // The frame index format for stackmaps and patchpoints is different from the
   // X86 format. It only has a FI and an offset.
-  if (Opc == TargetOpcode::STACKMAP || Opc == TargetOpcode::PATCHPOINT) {
+  if (Opc == TargetOpcode::STACKMAP || Opc == TargetOpcode::PATCHPOINT
+      || Opc == TargetOpcode::PCN_STACKMAP) {
     assert(BasePtr == FramePtr && "Expected the FP as base register");
     int64_t Offset = MI.getOperand(FIOperandNum + 1).getImm() + FIOffset;
     MI.getOperand(FIOperandNum + 1).ChangeToImmediate(Offset);
@@ -803,4 +804,11 @@ X86RegisterInfo::getPtrSizedStackRegister(const MachineFunction &MF) const {
   if (Subtarget.isTarget64BitILP32())
     StackReg = getX86SubSuperRegister(StackReg, 32);
   return StackReg;
+}
+
+int X86RegisterInfo::getReturnAddrLoc(const MachineFunction &MF,
+                                      unsigned &BaseReg) const {
+  const X86MachineFunctionInfo *X86FI = MF.getInfo<X86MachineFunctionInfo>();
+  const TargetFrameLowering *TFL = MF.getSubtarget().getFrameLowering();
+  return TFL->getFrameIndexReference(MF, X86FI->getRAIndex(), BaseReg);
 }

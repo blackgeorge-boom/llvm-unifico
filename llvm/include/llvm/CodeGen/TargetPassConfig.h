@@ -15,6 +15,7 @@
 
 #include "llvm/Pass.h"
 #include "llvm/Support/CodeGen.h"
+#include "llvm/Target/TargetMachine.h"
 #include <cassert>
 #include <string>
 
@@ -136,6 +137,15 @@ protected:
   /// preparation passes on IR.
   bool addCoreISelPasses();
 
+  /// Add equivalence points into the application
+  bool AddMigrationPoints = false;
+
+  /// Add stackmaps at function call sites & equivalence points
+  bool AddStackMaps = false;
+
+  /// Add stackmaps describing stack state in libc thread start functions
+  bool AddLibcStackMaps = false;
+
 public:
   TargetPassConfig(LLVMTargetMachine &TM, PassManagerBase &pm);
   // Dummy constructor.
@@ -154,6 +164,9 @@ public:
   void setInitialized() { Initialized = true; }
 
   CodeGenOpt::Level getOptLevel() const;
+
+  CodeGenOpt::Level getArchIROptLevel() const
+  { return TM->getArchIROptLevel(); }
 
   /// Returns true if one of the `-start-after`, `-start-before`, `-stop-after`
   /// or `-stop-before` options is set.
@@ -174,6 +187,26 @@ public:
   bool getEnableTailMerge() const { return EnableTailMerge; }
   void setEnableTailMerge(bool Enable) { setOpt(EnableTailMerge, Enable); }
 
+  /// Return whether we should instrument the code with equivalence points.
+  bool addMigrationPoints() const { return AddMigrationPoints; }
+
+  /// Return whether we should emit stack transformation metadata by
+  /// instrumenting the code with IR-level StackMaps.
+  bool addStackMaps() const { return AddStackMaps; }
+
+  /// Return whether we should emit transformation metadata (via IR-level
+  /// StackMaps) for libc thread start functions.
+  bool addLibcStackMaps() const { return AddLibcStackMaps; }
+
+  /// \brief Enable/disable adding equivalence points.
+  void setAddMigrationPoints(bool Set) { AddMigrationPoints = Set; }
+
+  /// \brief Enable/disable adding StackMaps.
+  void setAddStackMaps(bool Set) { AddStackMaps = Set; }
+
+  /// \brief Enable/disable adding StackMaps to libc thread start function.
+  void setAddLibcStackMaps(bool Set) { AddLibcStackMaps = Set; }
+  
   bool requiresCodeGenSCCOrder() const { return RequireCodeGenSCCOrder; }
   void setRequiresCodeGenSCCOrder(bool Enable = true) {
     setOpt(RequireCodeGenSCCOrder, Enable);
@@ -210,6 +243,9 @@ public:
   /// Return true if the default global register allocator is in use and
   /// has not be overriden on the command line with '-regalloc=...'
   bool usingDefaultRegAlloc() const;
+
+  /// Add Popcorn-specific IR passes for code generation.
+  void addPopcornPasses();
 
   /// High level function that adds all passes necessary to go from llvm IR
   /// representation to the MI representation.

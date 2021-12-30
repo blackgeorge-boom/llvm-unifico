@@ -103,6 +103,33 @@ namespace llvm {
   //
   FunctionPass *createMustExecutePrinter();
 
+  //===--------------------------------------------------------------------===//
+  //
+  // createPopcornCompatibilityPass - This pass analyzes & warns users about
+  // code features not yet supported by the Popcorn compiler, runtime & OS.
+  //
+  FunctionPass *createPopcornCompatibilityPass();
+
+  //===--------------------------------------------------------------------===//
+  //
+  // createLiveValuesPass - This pass calculates live-value sets for basic
+  // blocks in a function.
+  //
+  FunctionPass *createLiveValuesPass();
+
+  //===--------------------------------------------------------------------===//
+  //
+  // createEnumerateLoopPathsPass - This pass calculates all paths between
+  // equivalence points within a loop.
+  //
+  FunctionPass *createEnumerateLoopPathsPass();
+
+  //===--------------------------------------------------------------------===//
+  //
+  // createSelectMigrationPointsPass - This pass analyzes and marks instructions
+  // inside of functions to be migration points.
+  //
+  FunctionPass *createSelectMigrationPointsPass();
 }
 
 #endif

@@ -159,6 +159,14 @@ struct OpenMPScheduleTy final {
   OpenMPScheduleClauseModifier M2 = OMPC_SCHEDULE_MODIFIER_unknown;
 };
 
+/// \brief OpenMP attributes for 'prefetch' clause.
+enum OpenMPPrefetchClauseKind {
+#define OPENMP_PREFETCH_KIND(Name) \
+  OMPC_PREFETCH_##Name,
+#include "clang/Basic/OpenMPKinds.def"
+  OMPC_PREFETCH_unknown
+};
+
 OpenMPDirectiveKind getOpenMPDirectiveKind(llvm::StringRef Str);
 const char *getOpenMPDirectiveName(OpenMPDirectiveKind Kind);
 

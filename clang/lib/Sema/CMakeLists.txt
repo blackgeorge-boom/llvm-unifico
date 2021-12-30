@@ -23,6 +23,9 @@ add_clang_library(clangSema
   JumpDiagnostics.cpp
   MultiplexExternalSemaSource.cpp
   ParsedAttr.cpp
+  PrefetchAnalysis.cpp
+  PrefetchDataflow.cpp
+  PrefetchExprBuilder.cpp
   Scope.cpp
   ScopeInfo.cpp
   Sema.cpp

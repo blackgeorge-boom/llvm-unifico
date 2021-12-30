@@ -638,21 +638,12 @@ static void setPGOUseInstrumentor(CodeGenOptions &Opts,
 static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
                              DiagnosticsEngine &Diags,
                              const TargetOptions &TargetOpts,
-                             const FrontendOptions &FrontendOpts) {
+                             const FrontendOptions &FrontendOpts,
+			     unsigned OptLevel) {
   bool Success = true;
   llvm::Triple Triple = llvm::Triple(TargetOpts.Triple);
 
-  unsigned OptimizationLevel = getOptimizationLevel(Args, IK, Diags);
-  // TODO: This could be done in Driver
-  unsigned MaxOptLevel = 3;
-  if (OptimizationLevel > MaxOptLevel) {
-    // If the optimization level is not supported, fall back on the default
-    // optimization
-    Diags.Report(diag::warn_drv_optimization_value)
-        << Args.getLastArg(OPT_O)->getAsString(Args) << "-O" << MaxOptLevel;
-    OptimizationLevel = MaxOptLevel;
-  }
-  Opts.OptimizationLevel = OptimizationLevel;
+  Opts.OptimizationLevel = OptLevel;
 
   // At O0 we want to fully disable inlining outside of cases marked with
   // 'alwaysinline' that are required for correctness.
@@ -1350,7 +1341,37 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
 
   Opts.PopcornAlignment = Args.hasArg(OPT_popcorn_alignment);
 
+  Opts.PopcornMigratable = Args.hasArg(OPT_popcorn_migratable);
+
+  // TODO: the Popcorn compiler doesn't currently support vectorization
+  if(Opts.PopcornMigratable || Args.hasArg(OPT_popcorn_libc)) {
+    Opts.VectorizeLoop = 0;
+    Opts.VectorizeSLP = 0;
+  }
+
+  if(Opts.PopcornMigratable)
+    for(auto Target : Args.getAllArgValues(OPT_popcorn_target))
+      Opts.PopcornTargets.push_back(Target);
+
   return Success;
+}
+
+static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
+                             DiagnosticsEngine &Diags,
+                             const TargetOptions &TargetOpts,
+                             const FrontendOptions &FrontendOpts) {
+  unsigned OptimizationLevel = getOptimizationLevel(Args, IK, Diags);
+  // TODO: This could be done in Driver
+  unsigned MaxOptLevel = 3;
+  if (OptimizationLevel > MaxOptLevel) {
+    // If the optimization level is not supported, fall back on the default
+    // optimization
+    Diags.Report(diag::warn_drv_optimization_value)
+        << Args.getLastArg(OPT_O)->getAsString(Args) << "-O" << MaxOptLevel;
+    OptimizationLevel = MaxOptLevel;
+  }
+  return ParseCodeGenArgs(Opts, Args, IK, Diags, TargetOpts,
+                          FrontendOpts, OptimizationLevel);
 }
 
 static void ParseDependencyOutputArgs(DependencyOutputOptions &Opts,
@@ -1663,7 +1684,11 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
     case OPT_emit_codegen_only:
       Opts.ProgramAction = frontend::EmitCodeGenOnly; break;
     case OPT_emit_obj:
-      Opts.ProgramAction = frontend::EmitObj; break;
+      if(Args.hasArg(OPT_popcorn_migratable))
+        Opts.ProgramAction = frontend::EmitMultiObj;
+      else
+        Opts.ProgramAction = frontend::EmitObj;
+      break;
     case OPT_fixit_EQ:
       Opts.FixItSuffix = A->getValue();
       LLVM_FALLTHROUGH;
@@ -3118,6 +3143,8 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
 
   Opts.CompleteMemberPointers = Args.hasArg(OPT_fcomplete_member_pointers);
   Opts.BuildingPCHWithObjectFile = Args.hasArg(OPT_building_pch_with_obj);
+
+  Opts.DistributedOmp = Args.hasArg(OPT_distributed_omp);
 }
 
 static bool isStrictlyPreprocessorAction(frontend::ActionKind Action) {
@@ -3133,6 +3160,7 @@ static bool isStrictlyPreprocessorAction(frontend::ActionKind Action) {
   case frontend::EmitLLVMOnly:
   case frontend::EmitCodeGenOnly:
   case frontend::EmitObj:
+  case frontend::EmitMultiObj:
   case frontend::FixIt:
   case frontend::GenerateModule:
   case frontend::GenerateModuleInterface:
@@ -3314,6 +3342,13 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
     else
       Opts.SDKVersion = Version;
   }
+
+  // POPCORN: Set default CPU and ABI for convenience
+  llvm::Triple T(Opts.Triple);
+  if (T.getArch() == llvm::Triple::riscv64) {
+    //Opts.CPU = "rv64gc";
+    Opts.ABI = "lp64d";
+  }
 }
 
 bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,
@@ -3364,6 +3399,11 @@ bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,
   ParseTargetArgs(Res.getTargetOpts(), Args, Diags);
   Success &= ParseCodeGenArgs(Res.getCodeGenOpts(), Args, DashX, Diags,
                               Res.getTargetOpts(), Res.getFrontendOpts());
+  // TODO Popcorn: until we can limit optimizations across migration points, we
+  // need to turn off backend optimizations
+  if(Args.hasArg(OPT_popcorn_migratable) || Args.hasArg(OPT_popcorn_metadata))
+    Success &= ParseCodeGenArgs(Res.getCodeGenNoOpts(), Args, DashX, Diags,
+                                Res.getTargetOpts(), Res.getFrontendOpts(), 0);
   ParseHeaderSearchArgs(Res.getHeaderSearchOpts(), Args,
                         Res.getFileSystemOpts().WorkingDir);
   llvm::Triple T(Res.getTargetOpts().Triple);

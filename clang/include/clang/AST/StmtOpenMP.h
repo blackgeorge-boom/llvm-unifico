@@ -41,6 +41,8 @@ class OMPExecutableDirective : public Stmt {
   const unsigned NumClauses;
   /// Number of child expressions/stmts.
   const unsigned NumChildren;
+  /// Enable prefetching code generation for Popcorn Linux
+  bool Prefetch;
   /// Offset from this to the start of clauses.
   /// There are NumClauses pointers to clauses, they are followed by
   /// NumChildren pointers to child stmts/exprs (if the directive type
@@ -68,7 +70,7 @@ protected:
                          unsigned NumClauses, unsigned NumChildren)
       : Stmt(SC), Kind(K), StartLoc(std::move(StartLoc)),
         EndLoc(std::move(EndLoc)), NumClauses(NumClauses),
-        NumChildren(NumChildren),
+        NumChildren(NumChildren), Prefetch(false),
         ClausesOffset(llvm::alignTo(sizeof(T), alignof(OMPClause *))) {}
 
   /// Sets the list of variables for this clause.
@@ -342,6 +344,9 @@ public:
     return const_cast<Stmt *>(
         const_cast<const OMPExecutableDirective *>(this)->getStructuredBlock());
   }
+
+  bool prefetchingEnabled() const { return Prefetch; }
+  void setPrefetching(bool Prefetch) { this->Prefetch = Prefetch; }
 };
 
 /// This represents '#pragma omp parallel' directive.

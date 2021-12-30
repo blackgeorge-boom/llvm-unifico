@@ -330,6 +330,9 @@ LANGOPT(PaddingOnUnsignedFixedPoint, 1, 0,
 
 LANGOPT(RegisterStaticDestructors, 1, 1, "Register C++ static destructors")
 
+// Optimize OpenMP code generation for distributed execution on Popcorn Linux
+BENIGN_LANGOPT(DistributedOmp, 1, 0, "Optimize OpenMP for distributed execution")
+
 #undef LANGOPT
 #undef COMPATIBLE_LANGOPT
 #undef BENIGN_LANGOPT

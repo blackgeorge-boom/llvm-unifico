@@ -200,6 +200,7 @@ class Parser : public CodeCompletionHandler {
   std::unique_ptr<PragmaHandler> STDCCXLIMITHandler;
   std::unique_ptr<PragmaHandler> STDCUnknownHandler;
   std::unique_ptr<PragmaHandler> AttributePragmaHandler;
+  std::unique_ptr<PragmaHandler> PopcornHandler;
 
   std::unique_ptr<CommentHandler> CommentSemaHandler;
 
@@ -736,6 +737,13 @@ private:
       SourceLocation &AnyLoc, SourceLocation &LastMatchRuleEndLoc);
 
   void HandlePragmaAttribute();
+
+  /// \brief Handle the annotation token produced for
+  /// #pragma popcorn...
+  StmtResult HandlePragmaPopcorn();
+
+  /// \brief Parse a comma-separated variable list
+  void ParseVarList(llvm::SmallPtrSet<VarDecl *, 4> &Vars);
 
   /// GetLookAheadToken - This peeks ahead N tokens and returns that token
   /// without consuming any tokens.  LookAhead(0) returns 'Tok', LookAhead(1)
@@ -2829,6 +2837,11 @@ private:
 
   //===--------------------------------------------------------------------===//
   // OpenMP: Directives and clauses.
+  /// Checks 'prefetch' clauses for correctness.  Note that we can only
+  /// perform some semantic checks *after* the entire compound statement
+  /// representing the directive's body has been parsed.
+  void CheckOpenMPPrefetchClauses(StmtResult Directive);
+
   /// Parse clauses for '#pragma omp declare simd'.
   DeclGroupPtrTy ParseOMPDeclareSimdClauses(DeclGroupPtrTy Ptr,
                                             CachedTokens &Toks,
@@ -2932,9 +2945,11 @@ public:
   struct OpenMPVarListDataTy {
     Expr *TailExpr = nullptr;
     SourceLocation ColonLoc;
+    SourceLocation EndColonLoc;
     SourceLocation RLoc;
     CXXScopeSpec ReductionOrMapperIdScopeSpec;
     DeclarationNameInfo ReductionOrMapperId;
+    OpenMPPrefetchClauseKind PrefKind = OMPC_PREFETCH_unknown;
     OpenMPDependClauseKind DepKind = OMPC_DEPEND_unknown;
     OpenMPLinearClauseKind LinKind = OMPC_LINEAR_val;
     SmallVector<OpenMPMapModifierKind, OMPMapClause::NumberOfModifiers>
@@ -2944,6 +2959,8 @@ public:
     OpenMPMapClauseKind MapType = OMPC_MAP_unknown;
     bool IsMapTypeImplicit = false;
     SourceLocation DepLinMapLoc;
+    SourceLocation PrefLoc;
+    Expr *EndExpr;
   };
 
   /// Parses clauses with list.

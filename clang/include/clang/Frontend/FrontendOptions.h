@@ -73,6 +73,9 @@ enum ActionKind {
   /// Emit a .o file.
   EmitObj,
 
+  /// Emit a .o file for multiple ISAs.
+  EmitMultiObj,
+
   /// Parse and apply any fixits to the source.
   FixIt,
 

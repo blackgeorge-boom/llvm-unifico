@@ -1926,6 +1926,11 @@ void ASTStmtWriter::VisitSEHLeaveStmt(SEHLeaveStmt *S) {
   Code = serialization::STMT_SEH_LEAVE;
 }
 
+void OMPClauseWriter::VisitOMPPrefetchClause(OMPPrefetchClause *C) {
+  // TODO Rob
+  llvm_unreachable("not yet implemented");
+}
+
 //===----------------------------------------------------------------------===//
 // OpenMP Directives.
 //===----------------------------------------------------------------------===//

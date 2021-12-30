@@ -13,6 +13,7 @@
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/FaultMaps.h"
 #include "llvm/CodeGen/StackMaps.h"
+#include "llvm/CodeGen/UnwindInfo.h"
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/Target/TargetMachine.h"
 
@@ -27,7 +28,8 @@ class MCSymbol;
 
 class LLVM_LIBRARY_VISIBILITY X86AsmPrinter : public AsmPrinter {
   const X86Subtarget *Subtarget;
-  StackMaps SM;
+  StackMaps SM, PSM;
+  UnwindInfo UI;
   FaultMaps FM;
   std::unique_ptr<MCCodeEmitter> CodeEmitter;
   bool EmitFPOData = false;
@@ -81,6 +83,7 @@ class LLVM_LIBRARY_VISIBILITY X86AsmPrinter : public AsmPrinter {
   // the number of NOPs used for stackmap padding.
   void EmitAndCountInstruction(MCInst &Inst);
   void LowerSTACKMAP(const MachineInstr &MI);
+  void LowerPCN_STACKMAP(const MachineInstr &MI);
   void LowerPATCHPOINT(const MachineInstr &MI, X86MCInstLower &MCIL);
   void LowerSTATEPOINT(const MachineInstr &MI, X86MCInstLower &MCIL);
   void LowerFAULTING_OP(const MachineInstr &MI, X86MCInstLower &MCIL);

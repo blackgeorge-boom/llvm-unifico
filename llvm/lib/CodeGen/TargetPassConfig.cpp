@@ -72,8 +72,11 @@ static cl::opt<bool> DisableEarlyIfConversion("disable-early-ifcvt", cl::Hidden,
     cl::desc("Disable Early If-conversion"));
 static cl::opt<bool> DisableMachineLICM("disable-machine-licm", cl::Hidden,
     cl::desc("Disable Machine LICM"));
+// FIXME: workaround so that GlobalAddress's aren't spilled to the
+// stack on RISCV.
 static cl::opt<bool> DisableMachineCSE("disable-machine-cse", cl::Hidden,
-    cl::desc("Disable Machine Common Subexpression Elimination"));
+    cl::desc("Disable Machine Common Subexpression Elimination"),
+    cl::init(true));
 static cl::opt<cl::boolOrDefault> OptimizeRegAlloc(
     "optimize-regalloc", cl::Hidden,
     cl::desc("Enable optimized register allocation compilation path."));
@@ -634,7 +637,9 @@ void TargetPassConfig::addIRPasses() {
     addPass(createVerifierPass());
 
   // Run loop strength reduction before anything else.
-  if (getOptLevel() != CodeGenOpt::None && !DisableLSR) {
+  if (getOptLevel() != CodeGenOpt::None &&
+      getArchIROptLevel() != CodeGenOpt::None &&
+      !DisableLSR) {
     addPass(createLoopStrengthReducePass());
     if (PrintLSR)
       addPass(createPrintFunctionPass(dbgs(), "\n\n*** Code after LSR ***\n"));
@@ -659,10 +664,14 @@ void TargetPassConfig::addIRPasses() {
   addPass(createUnreachableBlockEliminationPass());
 
   // Prepare expensive constants for SelectionDAG.
-  if (getOptLevel() != CodeGenOpt::None && !DisableConstantHoisting)
+  if (getOptLevel() != CodeGenOpt::None &&
+      getArchIROptLevel() != CodeGenOpt::None &&
+      !DisableConstantHoisting)
     addPass(createConstantHoistingPass());
 
-  if (getOptLevel() != CodeGenOpt::None && !DisablePartialLibcallInlining)
+  if (getOptLevel() != CodeGenOpt::None &&
+      getArchIROptLevel() != CodeGenOpt::None &&
+      !DisablePartialLibcallInlining)
     addPass(createPartiallyInlineLibCallsPass());
 
   // Instrument function entry and exit, e.g. with calls to mcount().
@@ -723,9 +732,30 @@ void TargetPassConfig::addPassesToHandleExceptions() {
 /// Add pass to prepare the LLVM IR for code generation. This should be done
 /// before exception handling preparation passes.
 void TargetPassConfig::addCodeGenPrepare() {
-  if (getOptLevel() != CodeGenOpt::None && !DisableCGP)
+  if (getOptLevel() != CodeGenOpt::None &&
+      getArchIROptLevel() != CodeGenOpt::None &&
+      !DisableCGP)
     addPass(createCodeGenPreparePass());
   addPass(createRewriteSymbolsPass());
+}
+
+void TargetPassConfig::addPopcornPasses() {
+  assert(!(AddStackMaps && AddLibcStackMaps) &&
+    "Cannot add both InsertStackMapsPass and LibcStackMapsPass");
+  assert(!(AddMigrationPoints && AddLibcStackMaps) &&
+    "Should not be instrumenting libc with extra migration points");
+
+  // Add pass to instrument IR with equivalence points, which are implemented
+  // various ways depending on other command-line arguments
+  if(AddMigrationPoints) addPass(createMigrationPointsPass());
+
+  // Add pass to instrument IR with stackmap instructions, which get lowered to
+  // metadata needed for Popcorn's stack transformation
+  if(AddStackMaps) addPass(createInsertStackMapsPass());
+
+  // Similar to creatInsertStackMaps pass, but only instruments libc thread
+  // start functions
+  if(AddLibcStackMaps) addPass(createLibcStackMapsPass());
 }
 
 /// Add common passes that perform LLVM IR to IR transforms in preparation for
@@ -1103,6 +1133,10 @@ bool TargetPassConfig::addRegAssignmentOptimized() {
   // Allow targets to change the register assignments before rewriting.
   addPreRewrite();
 
+  // Gather additional stack transformation metadata before rewriting virtual
+  // registers
+  addPass(&StackTransformMetadataID);
+  
   // Finally rewrite virtual registers.
   addPass(&VirtRegRewriterID);
   // Perform stack slot coloring and post-ra machine LICM.
@@ -1176,7 +1210,8 @@ void TargetPassConfig::addOptimizedRegAlloc() {
     // Run post-ra machine LICM to hoist reloads / remats.
     //
     // FIXME: can this move into MachineLateOptimization?
-    addPass(&MachineLICMID);
+    if(getOptLevel() != CodeGenOpt::None)
+      addPass(&MachineLICMID);
   }
 }
 

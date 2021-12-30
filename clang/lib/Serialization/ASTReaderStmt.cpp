@@ -1982,6 +1982,11 @@ void ASTStmtReader::VisitAsTypeExpr(AsTypeExpr *E) {
   E->SrcExpr = Record.readSubExpr();
 }
 
+void OMPClauseReader::VisitOMPPrefetchClause(OMPPrefetchClause *C) {
+  // TODO Rob
+  llvm_unreachable("not yet implemented");
+}
+
 //===----------------------------------------------------------------------===//
 // OpenMP Directives.
 //===----------------------------------------------------------------------===//

@@ -4385,6 +4385,7 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
       case OMPC_from:
       case OMPC_use_device_ptr:
       case OMPC_is_device_ptr:
+      case OMPC_prefetch:
         continue;
       case OMPC_allocator:
       case OMPC_flush:
@@ -9263,6 +9264,7 @@ OMPClause *Sema::ActOnOpenMPSingleExprClause(OpenMPClauseKind Kind, Expr *Expr,
   case OMPC_reverse_offload:
   case OMPC_dynamic_allocators:
   case OMPC_atomic_default_mem_order:
+  case OMPC_prefetch:
     llvm_unreachable("Clause is not allowed.");
   }
   return Res;
@@ -9805,6 +9807,7 @@ static OpenMPDirectiveKind getOpenMPCaptureRegionForClause(
   case OMPC_reverse_offload:
   case OMPC_dynamic_allocators:
   case OMPC_atomic_default_mem_order:
+  case OMPC_prefetch:
     llvm_unreachable("Unexpected OpenMP clause.");
   }
   return CaptureRegion;
@@ -10198,6 +10201,7 @@ OMPClause *Sema::ActOnOpenMPSimpleClause(
   case OMPC_unified_shared_memory:
   case OMPC_reverse_offload:
   case OMPC_dynamic_allocators:
+  case OMPC_prefetch:
     llvm_unreachable("Clause is not allowed.");
   }
   return Res;
@@ -10376,6 +10380,7 @@ OMPClause *Sema::ActOnOpenMPSingleExprWithArgClause(
   case OMPC_reverse_offload:
   case OMPC_dynamic_allocators:
   case OMPC_atomic_default_mem_order:
+  case OMPC_prefetch:
     llvm_unreachable("Clause is not allowed.");
   }
   return Res;
@@ -10585,6 +10590,7 @@ OMPClause *Sema::ActOnOpenMPClause(OpenMPClauseKind Kind,
   case OMPC_use_device_ptr:
   case OMPC_is_device_ptr:
   case OMPC_atomic_default_mem_order:
+  case OMPC_prefetch:
     llvm_unreachable("Clause is not allowed.");
   }
   return Res;
@@ -10668,13 +10674,14 @@ OMPClause *Sema::ActOnOpenMPDynamicAllocatorsClause(SourceLocation StartLoc,
 
 OMPClause *Sema::ActOnOpenMPVarListClause(
     OpenMPClauseKind Kind, ArrayRef<Expr *> VarList, Expr *TailExpr,
-    const OMPVarListLocTy &Locs, SourceLocation ColonLoc,
-    CXXScopeSpec &ReductionOrMapperIdScopeSpec,
+    Expr *EndExpr, const OMPVarListLocTy &Locs, SourceLocation ColonLoc,
+    SourceLocation EndColonLoc, CXXScopeSpec &ReductionOrMapperIdScopeSpec,
     DeclarationNameInfo &ReductionOrMapperId, OpenMPDependClauseKind DepKind,
     OpenMPLinearClauseKind LinKind,
     ArrayRef<OpenMPMapModifierKind> MapTypeModifiers,
     ArrayRef<SourceLocation> MapTypeModifiersLoc, OpenMPMapClauseKind MapType,
-    bool IsMapTypeImplicit, SourceLocation DepLinMapLoc) {
+    bool IsMapTypeImplicit, SourceLocation DepLinMapLoc,
+    OpenMPPrefetchClauseKind PrefKind, SourceLocation PrefLoc) {
   SourceLocation StartLoc = Locs.StartLoc;
   SourceLocation LParenLoc = Locs.LParenLoc;
   SourceLocation EndLoc = Locs.EndLoc;
@@ -10791,6 +10798,7 @@ OMPClause *Sema::ActOnOpenMPVarListClause(
   case OMPC_reverse_offload:
   case OMPC_dynamic_allocators:
   case OMPC_atomic_default_mem_order:
+  case OMPC_prefetch:
     llvm_unreachable("Clause is not allowed.");
   }
   return Res;
@@ -15306,4 +15314,59 @@ OMPClause *Sema::ActOnOpenMPAllocateClause(
 
   return OMPAllocateClause::Create(Context, StartLoc, LParenLoc, Allocator,
                                    ColonLoc, EndLoc, Vars);
+}
+
+OMPClause *
+Sema::ActOnOpenMPPrefetchClause(OpenMPPrefetchClauseKind PrefKind,
+                                SourceLocation PrefLoc,
+                                ArrayRef<Expr *> VarList,
+                                Expr *Start, Expr *End,
+                                SourceLocation StartLoc,
+                                SourceLocation LParenLoc,
+                                SourceLocation FirstColonLoc,
+                                SourceLocation SecondColonLoc,
+                                SourceLocation EndLoc) {
+  // Check validity of range expressions & variables which use them
+  if(Start) {
+    if(!Start->getType()->isIntegerType()) {
+      Diag(Start->getExprLoc(), diag::err_omp_invalid_prefetch_range_type);
+      return nullptr;
+    }
+
+    if(End) {
+      if(!End->getType()->isIntegerType()) {
+        Diag(End->getExprLoc(), diag::err_omp_invalid_prefetch_range_type);
+        return nullptr;
+      }
+    }
+
+    for(const auto &Var : VarList) {
+      QualType T = Var->getType();
+
+      if(!T->isArrayType() && !T->isPointerType()) {
+        Diag(Var->getExprLoc(), diag::err_omp_invalid_prefetch_var_type)
+          << "array or pointer";
+        return nullptr;
+      }
+    }
+  }
+  else {
+    for(const auto &Var : VarList) {
+      // Note: array types with known sizes may be decayed to pointer types.
+      // We want the original type (i.e., the array type) but we can't simply
+      // call T.getDesugaredType() as it will return the pointer type.
+      QualType T = Var->getType();
+      while(isa<DecayedType>(T)) T = cast<DecayedType>(T)->getOriginalType();
+
+      if(!T->isConstantArrayType()) {
+        Diag(Var->getExprLoc(), diag::err_omp_invalid_prefetch_var_type)
+          << "constant-sized array";
+        return nullptr;
+      }
+    }
+  }
+
+  return OMPPrefetchClause::Create(Context, PrefKind, PrefLoc, VarList, Start,
+                                   End, StartLoc, LParenLoc, FirstColonLoc,
+                                   SecondColonLoc, EndLoc);
 }

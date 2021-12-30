@@ -174,6 +174,7 @@ int AArch64TTIImpl::getIntImmCost(Intrinsic::ID IID, unsigned Idx,
     }
     break;
   case Intrinsic::experimental_stackmap:
+  case Intrinsic::experimental_pcn_stackmap:
     if ((Idx < 2) || (Imm.getBitWidth() <= 64 && isInt<64>(Imm.getSExtValue())))
       return TTI::TCC_Free;
     break;
@@ -870,6 +871,9 @@ bool AArch64TTIImpl::shouldConsiderAddressTypePromotion(
   bool Considerable = false;
   AllowPromotionWithoutCommonHeader = false;
   if (!isa<SExtInst>(&I))
+    return false;
+  const TargetMachine &TM = getTLI()->getTargetMachine();
+  if (TM.getArchIROptLevel() == CodeGenOpt::None)
     return false;
   Type *ConsideredSExtType =
       Type::getInt64Ty(I.getParent()->getParent()->getContext());

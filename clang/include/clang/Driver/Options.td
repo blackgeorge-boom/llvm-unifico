@@ -191,6 +191,8 @@ def Link_Group : OptionGroup<"<T/e/s/t/u group>">, DocName<"Linker flags">,
 def T_Group : OptionGroup<"<T group>">, Group<Link_Group>, DocFlatten;
 def u_Group : OptionGroup<"<u group>">, Group<Link_Group>, DocFlatten;
 
+def Popcorn_Target_Group  : OptionGroup<"<Popcorn target group>">, Group<CompileOnly_Group>;
+
 def reserved_lib_Group : OptionGroup<"<reserved libs group>">,
                          Flags<[Unsupported]>;
 
@@ -2533,7 +2535,12 @@ def pedantic : Flag<["-", "--"], "pedantic">, Group<pedantic_Group>, Flags<[CC1O
 def pg : Flag<["-"], "pg">, HelpText<"Enable mcount instrumentation">, Flags<[CC1Option]>;
 def pipe : Flag<["-", "--"], "pipe">,
   HelpText<"Use pipes between commands, when possible">;
+def popcorn_migratable : Flag<["-"], "popcorn-migratable">, HelpText<"Instrument code to be migratable on Popcorn Linux (implies -popcorn-alignment)">, Flags<[CC1Option]>;
+def popcorn_metadata : Flag<["-"], "popcorn-metadata">, HelpText<"Generate stack transformation metadata without inserting migration points (implies -popcorn-alignment)">, Flags<[CC1Option]>;
+def popcorn_libc : Flag<["-"], "popcorn-libc">, HelpText<"Compile libc code with appropriate instrumentation for migration (implies -popcorn-alignment)">, Flags<[CC1Option]>;
 def popcorn_alignment : Flag<["-"], "popcorn-alignment">, HelpText<"Run Popcorn passes to prepare for link-time symbol alignment">, Flags<[CC1Option]>;
+def popcorn_target : Joined<["-"], "popcorn-target=">, HelpText<"Targets for which to generate object files (requires -popcorn-migratable)">, Group<Popcorn_Target_Group>, Flags<[CC1Option]>, MetaVarName<"<target>">;
+def distributed_omp : Flag<["-"], "distributed-omp">, HelpText<"Optimize OpenMP code generation for distributed execution on Popcorn Linux">, Flags<[CC1Option]>;
 def prebind__all__twolevel__modules : Flag<["-"], "prebind_all_twolevel_modules">;
 def prebind : Flag<["-"], "prebind">;
 def preload : Flag<["-"], "preload">;

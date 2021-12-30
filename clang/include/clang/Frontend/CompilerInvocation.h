@@ -126,6 +126,9 @@ class CompilerInvocation : public CompilerInvocationBase {
   /// Options controlling IRgen and the backend.
   CodeGenOptions CodeGenOpts;
 
+  /// Options controlling IRgen and the backend (with optimization disabled).
+  CodeGenOptions CodeGenOptsNoOpt;
+
   /// Options controlling dependency output.
   DependencyOutputOptions DependencyOutputOpts;
 
@@ -193,6 +196,11 @@ public:
 
   CodeGenOptions &getCodeGenOpts() { return CodeGenOpts; }
   const CodeGenOptions &getCodeGenOpts() const { return CodeGenOpts; }
+
+  CodeGenOptions &getCodeGenNoOpts() { return CodeGenOptsNoOpt; }
+  const CodeGenOptions &getCodeGenNoOpts() const {
+    return CodeGenOptsNoOpt;
+  }
 
   DependencyOutputOptions &getDependencyOutputOpts() {
     return DependencyOutputOpts;

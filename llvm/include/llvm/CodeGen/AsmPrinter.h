@@ -22,6 +22,8 @@
 #include "llvm/CodeGen/AsmPrinterHandler.h"
 #include "llvm/CodeGen/DwarfStringPoolEntry.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineModuleInfo.h"
+#include "llvm/CodeGen/MachineModuleInfoImpls.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -212,8 +214,11 @@ public:
   /// Return information about object file lowering.
   const TargetLoweringObjectFile &getObjFileLowering() const;
 
+  // CJP: StackMap workaround.
   /// Return information about data layout.
-  const DataLayout &getDataLayout() const;
+  const DataLayout &getDataLayout() const {
+    return MMI->getModule()->getDataLayout();
+  }
 
   /// Return the pointer size from the TargetMachine
   unsigned getPointerSize() const;
@@ -293,9 +298,10 @@ public:
 
   /// Emit the specified function out to the OutStreamer.
   bool runOnMachineFunction(MachineFunction &MF) override {
+    bool modified = TagCallSites(MF);
     SetupMachineFunction(MF);
     EmitFunctionBody();
-    return false;
+    return modified;
   }
 
   //===------------------------------------------------------------------===//
@@ -433,6 +439,13 @@ public:
   /// instructions in verbose mode.
   virtual void emitImplicitDef(const MachineInstr *MI) const;
 
+  /// Some machine instructions encapsulate a call with follow-on boilerplate
+  /// instructions, meaning labels emitted after the "instruction" do not
+  /// capture the call's true return address.  Return an offset for correcting
+  /// these labels to refer to the call's actual return address.
+  virtual int getCanonicalReturnAddr(const MachineInstr *Call) const
+  { return 0; }
+
   //===------------------------------------------------------------------===//
   // Symbol Lowering Routines.
   //===------------------------------------------------------------------===//
@@ -503,6 +516,14 @@ public:
 
   /// Emit something like ".long Label + Offset".
   void EmitDwarfOffset(const MCSymbol *Label, uint64_t Offset) const;
+
+  /// Find the stackmap intrinsic associated with a function call
+  MachineInstr *FindPcnStackMap(MachineBasicBlock &MBB,
+				MachineInstr *MI) const;
+
+  /// Move stackmap intrinsics directly after calls to correctly capture
+  /// return addresses
+  bool TagCallSites(MachineFunction &MF);
 
   //===------------------------------------------------------------------===//
   // Dwarf Emission Helper Routines

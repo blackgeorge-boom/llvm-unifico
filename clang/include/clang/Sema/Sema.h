@@ -9595,13 +9595,14 @@ public:
 
   OMPClause *ActOnOpenMPVarListClause(
       OpenMPClauseKind Kind, ArrayRef<Expr *> Vars, Expr *TailExpr,
-      const OMPVarListLocTy &Locs, SourceLocation ColonLoc,
-      CXXScopeSpec &ReductionOrMapperIdScopeSpec,
+      Expr *EndExpr, const OMPVarListLocTy &Locs, SourceLocation ColonLoc,
+      SourceLocation EndColonLoc, CXXScopeSpec &ReductionOrMapperIdScopeSpec,
       DeclarationNameInfo &ReductionOrMapperId, OpenMPDependClauseKind DepKind,
       OpenMPLinearClauseKind LinKind,
       ArrayRef<OpenMPMapModifierKind> MapTypeModifiers,
       ArrayRef<SourceLocation> MapTypeModifiersLoc, OpenMPMapClauseKind MapType,
-      bool IsMapTypeImplicit, SourceLocation DepLinMapLoc);
+      bool IsMapTypeImplicit, SourceLocation DepLinMapLoc,
+      OpenMPPrefetchClauseKind PrefKind, SourceLocation PrefLoc);
   /// Called on well-formed 'allocate' clause.
   OMPClause *
   ActOnOpenMPAllocateClause(Expr *Allocator, ArrayRef<Expr *> VarList,
@@ -9736,6 +9737,18 @@ public:
   /// Called on well-formed 'is_device_ptr' clause.
   OMPClause *ActOnOpenMPIsDevicePtrClause(ArrayRef<Expr *> VarList,
                                           const OMPVarListLocTy &Locs);
+
+  /// Called on well-formed 'prefetch' clause.
+  OMPClause *
+  ActOnOpenMPPrefetchClause(OpenMPPrefetchClauseKind PrefKind,
+                            SourceLocation PrefLoc,
+                            ArrayRef<Expr *> VarList,
+                            Expr *Start, Expr *End,
+                            SourceLocation StartLoc,
+                            SourceLocation LParenLoc,
+                            SourceLocation FirstColonLoc,
+                            SourceLocation SecondColonLoc,
+                            SourceLocation EndLoc);
 
   /// The kind of conversion being performed.
   enum CheckedConversionKind {

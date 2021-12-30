@@ -15,6 +15,7 @@
 
 #include "clang/AST/DeclGroup.h"
 #include "clang/AST/StmtIterator.h"
+#include "clang/AST/Prefetch.h"
 #include "clang/Basic/CapturedStmt.h"
 #include "clang/Basic/IdentifierTable.h"
 #include "clang/Basic/LLVM.h"
@@ -2381,7 +2382,7 @@ public:
 /// ForStmt - This represents a 'for (init;cond;inc)' stmt.  Note that any of
 /// the init/cond/inc parts of the ForStmt will be null if they were not
 /// specified in the source.
-class ForStmt : public Stmt {
+  class ForStmt : public Stmt, public Prefetchable {
   enum { INIT, CONDVAR, COND, INC, BODY, END_EXPR };
   Stmt* SubExprs[END_EXPR]; // SubExprs[INIT] is an expression or declstmt.
   SourceLocation LParenLoc, RParenLoc;
@@ -3418,6 +3419,12 @@ private:
   /// The record for captured variables, a RecordDecl or CXXRecordDecl.
   RecordDecl *TheRecordDecl = nullptr;
 
+  /// For captured OpenMP parallel regions, variables declared in the
+  /// shared clause may be stored on the main thread's stack.  This
+  /// causes false sharing in Popcorn's distributed execution.  If
+  /// set, offload shared variables to global memory for the capture.
+  bool OffloadShared;
+
   /// Construct a captured statement.
   CapturedStmt(Stmt *S, CapturedRegionKind Kind, ArrayRef<Capture> Captures,
                ArrayRef<Expr *> CaptureInits, CapturedDecl *CD, RecordDecl *RD);
@@ -3475,6 +3482,10 @@ public:
 
   /// True if this variable has been captured.
   bool capturesVariable(const VarDecl *Var) const;
+
+  /// Getters/setters for the offloading shared variables flag
+  bool offloadShared() const { return OffloadShared; }
+  void setOffloadShared(bool OS) { OffloadShared = OS; }
 
   /// An iterator that walks over the captures.
   using capture_iterator = Capture *;

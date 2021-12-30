@@ -145,6 +145,9 @@ public:
   Register getFramePtr() const { return FramePtr; }
   // FIXME: Move to FrameInfok
   unsigned getSlotSize() const { return SlotSize; }
+
+  int getReturnAddrLoc(const MachineFunction &MF,
+                       unsigned &BaseReg) const override;
 };
 
 } // End llvm namespace
