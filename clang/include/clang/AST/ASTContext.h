@@ -43,6 +43,7 @@
 #include "clang/Basic/Specifiers.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/XRayLists.h"
+#include "clang/Sema/PrefetchAnalysis.h"
 #include "llvm/ADT/APSInt.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
@@ -418,6 +419,9 @@ private:
   llvm::DenseMap<Module*, PerModuleInitializers*> ModuleInitializers;
 
   ASTContext &this_() { return *this; }
+
+  /// \brief Analysis on statements for which prefetching has been enabled.
+  mutable llvm::DenseMap<const Stmt *, PrefetchAnalysis> PrefetchAnalyses;
 
 public:
   /// A type synonym for the TemplateOrInstantiation mapping.
@@ -1114,6 +1118,20 @@ public:
 
   /// Retrieve the declaration for the 128-bit unsigned integer type.
   TypedefDecl *getUInt128Decl() const;
+
+  /// \brief Add a new prefetching analysis.  Note that analysis should be done
+  /// before adding it to the context.
+  void addPrefetchAnalysis(const Stmt *S, PrefetchAnalysis &PA)
+  { PrefetchAnalyses[S] = PA; }
+
+  /// \brief Retrieve prefetching analysis for a statement if it exists, or
+  /// return a nullptr otherwise.
+  const PrefetchAnalysis *getPrefetchAnalysis(const Stmt *S) const {
+    llvm::DenseMap<const Stmt *, PrefetchAnalysis>::iterator it;
+    it = PrefetchAnalyses.find(S);
+    if(it != PrefetchAnalyses.end()) return &it->second;
+    else return nullptr;
+  }
 
   //===--------------------------------------------------------------------===//
   //                           Type Constructors

@@ -23,6 +23,7 @@ add_clang_library(clangParse
 
   LINK_LIBS
   clangAST
+  clangAnalysis
   clangBasic
   clangLex
   clangSema

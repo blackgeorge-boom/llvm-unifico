@@ -18,6 +18,7 @@
 #include "clang/AST/Stmt.h"
 #include "clang/AST/StmtOpenMP.h"
 #include "clang/AST/DeclOpenMP.h"
+#include "llvm/IR/CallSite.h"
 using namespace clang;
 using namespace CodeGen;
 
@@ -1272,6 +1273,7 @@ static void emitCommonOMPParallelDirective(
   CGF.GenerateOpenMPCapturedVars(*CS, CapturedVars);
   CGF.CGM.getOpenMPRuntime().emitParallelCall(CGF, S.getBeginLoc(), OutlinedFn,
                                               CapturedVars, IfCond);
+  if(CS->offloadShared()) CGF.RestoreOffloadedLocals(CS);
 }
 
 static void emitEmptyBoundParameters(CodeGenFunction &,
@@ -1616,6 +1618,161 @@ static void emitSimdlenSafelenClause(CodeGenFunction &CGF,
     // the memory instructions parallel, because loop-carried
     // dependences of 'safelen' iterations are possible.
     CGF.LoopStack.setParallel(/*Enable=*/false);
+  }
+}
+
+/// Ease the variable lookup burden for captures.
+typedef llvm::DenseMap<const VarDecl *, DeclRefExpr *> CaptureMap;
+
+/// Map variable declarations captured in the outer function to their field in
+/// the captured struct.
+static void
+buildCapturedMap(ASTContext &C, CapturedStmt *CS, CaptureMap &Map) {
+  // Captures are in a 1-to-1 correspondence with captured record fields
+  Map.clear();
+  for(auto Child : CS->children()) {
+    if(isa<DeclRefExpr>(Child)) {
+      DeclRefExpr *DRE = cast<DeclRefExpr>(Child);
+      ValueDecl *Decl = DRE->getDecl();
+      if(isa<VarDecl>(Decl)) Map[cast<VarDecl>(Decl)] = DRE;
+    }
+  }
+}
+
+/// Create an expression representing the address of some array index.
+static Expr *getPrefetchAddr(ASTContext &C, Expr *Ptr, Expr *Subscript) {
+  QualType BaseTy = Ptr->getType().getDesugaredType(C), IdxTy;
+
+  // Get an array subscript
+  if(isa<ArrayType>(BaseTy)) IdxTy = cast<ArrayType>(BaseTy)->getElementType();
+  else IdxTy = cast<PointerType>(BaseTy)->getPointeeType();
+  Expr *Index = new (C) ArraySubscriptExpr(Ptr, Subscript, IdxTy,
+                                           VK_RValue, OK_Ordinary,
+                                           SourceLocation());
+
+  // Take the address of the array subscript
+  QualType RePtrTy = C.getPointerType(IdxTy);
+  UnaryOperator *Addr = new (C) UnaryOperator(Index, UO_AddrOf, RePtrTy, VK_LValue,
+					      OK_Ordinary, SourceLocation(), true);
+
+  // Finally, cast to a const void * type
+  QualType VoidPtrTy = C.getPointerType(C.VoidTy.withConst());
+  return ImplicitCastExpr::Create(C, VoidPtrTy, CK_BitCast, Addr, nullptr,
+                                  VK_RValue);
+}
+
+static Expr *getArrayIndexAddr(ASTContext &C, Expr *Arr, const llvm::APInt &Idx) {
+  QualType Ty = Arr->getType();
+  if(Ty->isArrayType()) {
+    Ty = C.getPointerType(cast<ArrayType>(Ty)->getElementType());
+    Arr = ImplicitCastExpr::Create(C, Ty, CK_ArrayToPointerDecay, Arr, nullptr,
+                                   VK_RValue);
+  }
+  Expr *IdxLiteral =
+    IntegerLiteral::Create(C, Idx, C.LongTy, SourceLocation());
+  return getPrefetchAddr(C, Arr, IdxLiteral);
+}
+
+static Expr *getArrayIndexAddr(ASTContext &C, Expr *Arr, int64_t Idx) {
+  return getArrayIndexAddr(C, Arr, llvm::APInt(64, Idx, true));
+}
+
+static llvm::Constant *getPrefetchKind(CodeGenFunction &CGF,
+                                       OpenMPPrefetchClauseKind Kind) {
+  llvm::Type *Ty = llvm::Type::getInt32Ty(CGF.CurFn->getContext());
+  switch(Kind) {
+  case OMPC_PREFETCH_read: return llvm::ConstantInt::get(Ty, 0);
+  case OMPC_PREFETCH_write: return llvm::ConstantInt::get(Ty, 1);
+  //case OMPC_PREFETCH_release: return llvm::ConstantInt::get(Ty, 3);
+  default:
+    llvm_unreachable("Invalid prefetch type\n");
+    return nullptr;
+  }
+}
+
+void CodeGenFunction::EmitOMPPrefetchClauses(const OMPLoopDirective &D) {
+  ASTContext &AST = getContext();
+  CaptureMap AllCaptures;
+  CaptureMap::iterator Captured;
+  const ConstantArrayType *ArrTy;
+  Expr *Base, *Start, *End, *StartAddr, *EndAddr;
+  RValue LoweredStart, LoweredEnd;
+  std::vector<llvm::Value *> Params;
+  std::vector<llvm::Type *> ParamTypes;
+  llvm::FunctionType *FnType;
+  llvm::FunctionCallee Prefetch, Execute;
+
+  bool HasPrefetch = D.hasClausesOfKind<OMPPrefetchClause>();
+  if(HasPrefetch) {
+    // declare void @popcorn_prefetch(i32, i8*, i8*)
+    ParamTypes = { Int32Ty, Int8PtrTy, Int8PtrTy };
+    FnType = llvm::FunctionType::get(VoidTy, ParamTypes, false);
+    Prefetch = CGM.CreateRuntimeFunction(FnType, "popcorn_prefetch");
+
+    // declare i64 @popcorn_prefetch_execute()
+    ParamTypes.clear();
+    FnType = llvm::FunctionType::get(Int64Ty, ParamTypes, false);
+    Execute = CGM.CreateRuntimeFunction(FnType, "popcorn_prefetch_execute");
+
+    // For each prefetched variable, construct start & end range expressions
+    // and call @popcorn_prefetch
+    const auto *CS = cast_or_null<CapturedStmt>(D.getAssociatedStmt());
+    buildCapturedMap(AST, const_cast<CapturedStmt *>(CS), AllCaptures);
+
+    for(const auto *C : D.getClausesOfKind<OMPPrefetchClause>()) {
+      Start = C->getStartOfRange();
+      End = C->getEndOfRange();
+
+      for(auto &V : C->varlists()) {
+        const DeclRefExpr *DR = cast<DeclRefExpr>(V);
+        const VarDecl *VD = cast<VarDecl>(DR->getDecl());
+        Captured = AllCaptures.find(VD);
+
+        // TODO the current mechanism for calculating addresses applies an
+        // "inbounds" tag to the array index addressing expression, but we
+        // don't necessarily know this is true.
+        if(Captured != AllCaptures.end()) {
+          Base = Captured->second;
+          if(Start && End) {
+            // User specified entire range
+            StartAddr = getPrefetchAddr(AST, Base, Start);
+            EndAddr = getPrefetchAddr(AST, Base, End);
+          }
+          else if(Start) {
+            // User specified an expression affine to loop iteration variable
+            // TODO if expression is affine transformation of loop induction
+            // variable, need to re-generate for lower/upper bound variables
+            assert(isa<DeclRefExpr>(Start) &&
+                   "Can't handle transformations on loop variables yet");
+            StartAddr = getPrefetchAddr(AST, Base, D.getLowerBoundVariable());
+            EndAddr = getPrefetchAddr(AST, Base, D.getUpperBoundVariable());
+          }
+          else {
+            // User didn't specify a range, prefetch the entire array (note:
+            // should have type checked it's an array by now).
+            QualType QTy = Base->getType();
+            while(isa<DecayedType>(QTy))
+              QTy = cast<DecayedType>(QTy)->getOriginalType();
+            ArrTy = cast<ConstantArrayType>(QTy);
+            const llvm::APInt &Size = ArrTy->getSize();
+            StartAddr = getArrayIndexAddr(AST, Base, 0);
+            EndAddr = getArrayIndexAddr(AST, Base, Size);
+          }
+
+          LoweredStart = EmitAnyExpr(StartAddr);
+          LoweredEnd = EmitAnyExpr(EndAddr);
+          Params = { getPrefetchKind(*this, C->getPrefetchKind()),
+                     LoweredStart.getScalarVal(),
+                     LoweredEnd.getScalarVal() };
+          EmitCallOrInvoke(Prefetch, Params);
+        }
+        else llvm_unreachable("Invalid prefetch variable");
+      }
+    }
+
+    // Finally, call @popcorn_prefetch_execute to issue requests
+    Params.clear();
+    EmitCallOrInvoke(Execute, Params);
   }
 }
 
@@ -2369,6 +2526,8 @@ bool CodeGenFunction::EmitOMPWorksharingLoop(
         // UB = min(UB, GlobalUB);
         if (!StaticChunkedOne)
           EmitIgnoredExpr(S.getEnsureUpperBound());
+        // Popcorn: emit prefetch function declarations & requests
+        if(S.prefetchingEnabled()) EmitOMPPrefetchClauses(S);
         // IV = LB;
         EmitIgnoredExpr(S.getInit());
         // For unchunked static schedule generate:
@@ -3991,6 +4150,7 @@ static void emitOMPAtomicExpr(CodeGenFunction &CGF, OpenMPClauseKind Kind,
   case OMPC_reverse_offload:
   case OMPC_dynamic_allocators:
   case OMPC_atomic_default_mem_order:
+  case OMPC_prefetch:
     llvm_unreachable("Clause is not allowed in 'omp atomic'.");
   }
 }

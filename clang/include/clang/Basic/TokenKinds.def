@@ -836,6 +836,12 @@ ANNOTATION(module_end)
 // into the name of a header unit.
 ANNOTATION(header_unit)
 
+// Annotations for Popcorn Linux - #pragma popcorn ...
+// The lexer produces these so that they only take effect when the parser
+// handles #pragma popcorn ... directives.
+ANNOTATION(pragma_popcorn_prefetch)
+ANNOTATION(pragma_popcorn_prefetch_end)
+
 #undef ANNOTATION
 #undef TESTING_KEYWORD
 #undef OBJC_AT_KEYWORD

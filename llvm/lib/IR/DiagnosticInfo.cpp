@@ -62,6 +62,11 @@ DiagnosticInfoInlineAsm::DiagnosticInfoInlineAsm(const Instruction &I,
   }
 }
 
+bool DiagnosticInfoOptimizationError::isEnabled() const {
+  // Only print errors.
+  return getSeverity() == DS_Error;
+}
+
 void DiagnosticInfoInlineAsm::print(DiagnosticPrinter &DP) const {
   DP << getMsgStr();
   if (getLocCookie())

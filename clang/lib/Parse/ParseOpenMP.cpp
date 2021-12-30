@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/AST/StmtOpenMP.h"
 #include "clang/Parse/ParseDiagnostic.h"
 #include "clang/Parse/Parser.h"
@@ -81,6 +82,104 @@ static unsigned getOpenMPDirectiveKindEx(StringRef S) {
       .Case("update", OMPD_update)
       .Case("mapper", OMPD_mapper)
       .Default(OMPD_unknown);
+}
+
+/// Helper class to find variables declared or used in a statement's
+/// sub-tree.
+class VarFinder : public RecursiveASTVisitor<VarFinder> {
+public:
+  void reset() { Variables.clear(); }
+
+  bool VisitDeclStmt(DeclStmt *D) {
+    for(auto &Child : D->getDeclGroup()) {
+      if(isa<VarDecl>(Child))
+        Variables.insert(cast<VarDecl>(Child));
+    }
+    return true;
+  }
+
+  bool VisitDeclRefExpr(DeclRefExpr *D) {
+    ValueDecl *VD = D->getDecl();
+    if(isa<VarDecl>(VD)) Variables.insert(cast<VarDecl>(VD));
+    return true;
+  }
+
+  bool VisitVarDecl(VarDecl *D) { Variables.insert(D); return true; }
+
+  const llvm::SmallPtrSet<const VarDecl *, 2> &
+  getDeclaredOrReferencedVars() const { return Variables; }
+
+private:
+  llvm::SmallPtrSet<const VarDecl *, 2> Variables;
+};
+
+void Parser::CheckOpenMPPrefetchClauses(StmtResult Directive) {
+  VarFinder CapturedVarFinder, LoopVarFinder, UseFinder;
+
+  OMPLoopDirective *D = dyn_cast<OMPLoopDirective>(Directive.get());
+  if(D) {
+    // OpenMP Standard 4.5, Section 2.6:
+    // A loop has canonical loop form if it conforms to the following:
+    //    for (init-expr; test-expr; incr-expr) structured-block
+    //      init-expr     One of the following:
+    //                    var = lb
+    //                    integer-type var = lb
+    //                    random-access-iterator-type var = lb
+    //                    pointer-type var = lb
+    //
+    // Thus we can examine the initialization statement to find the loop
+    // iteration variable.
+    CapturedStmt *Captured = cast<CapturedStmt>(D->getAssociatedStmt());
+    ForStmt *For = cast<ForStmt>(Captured->getCapturedStmt());
+
+    // Find captured & loop iteration variables
+    CapturedVarFinder.TraverseStmt(Captured);
+    const llvm::SmallPtrSet<const VarDecl *, 2> &CapturedVars =
+      CapturedVarFinder.getDeclaredOrReferencedVars();
+    LoopVarFinder.TraverseStmt(For->getInit());
+    const llvm::SmallPtrSet<const VarDecl *, 2> &LoopVars =
+      LoopVarFinder.getDeclaredOrReferencedVars();
+
+    //for(auto &&I = D->getClausesOfKind<OMPPrefetchClause>(); I; ++I) {
+    for (auto *I: D->getClausesOfKind<OMPPrefetchClause>()) {
+      auto *C = &cast<OMPPrefetchClause>(*I);
+
+      if(C->getPrefetchKind() == OMPC_PREFETCH_smart &&
+         !For->prefetchEnabled()) {
+        // Analyse for-loop to determine what variables to prefetch
+        ASTContext &Ctx = getActions().getASTContext();
+        For->setPrefetchEnabled(true);
+        PrefetchAnalysis PA(&Ctx, For);
+        PA.analyzeStmt();
+        PA.calculatePrefetchRanges();
+        // TODO remove
+        PA.dump();
+        Ctx.addPrefetchAnalysis(For, PA);
+      }
+      else {
+        // Verify we're only prefetching captured variables
+        for(auto E : C->varlists()) {
+          UseFinder.reset();
+          // TODO this cast is nasty
+          UseFinder.TraverseStmt(const_cast<Expr *>(E));
+          for(const auto &V : UseFinder.getDeclaredOrReferencedVars())
+            if(!CapturedVars.count(V))
+              Diag(E->getExprLoc(), diag::err_omp_invalid_prefetch_capture);
+        }
+  
+        // Verify loop iteration variable use
+        Expr *Start = C->getStartOfRange(), *End = C->getEndOfRange();
+        if(Start && !End) {
+          UseFinder.reset();
+          UseFinder.TraverseStmt(Start);
+          for(const auto &V : UseFinder.getDeclaredOrReferencedVars())
+            if(!LoopVars.count(V))
+              Diag(C->getFirstColonLoc(),
+                   diag::err_omp_invalid_prefetch_loop_var);
+        }
+      }
+    }
+  }
 }
 
 static OpenMPDirectiveKind parseOpenMPDirectiveKind(Parser &P) {
@@ -1465,6 +1564,21 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(ParsedStmtContext StmtCtx) {
         DKind, DirName, CancelRegion, Clauses, AssociatedStmt.get(), Loc,
         EndLoc);
 
+    // Enable optimizations for Popcorn Linux, if requested.
+    if(PP.getLangOpts().DistributedOmp) {
+      if((DKind == OMPD_parallel || DKind == OMPD_parallel_for ||
+          DKind == OMPD_parallel_for_simd || DKind == OMPD_parallel_sections)) {
+        CapturedStmt *CS = cast<CapturedStmt>(AssociatedStmt.get());
+        CS->setOffloadShared(true);
+      }
+
+      if(DKind == OMPD_for || DKind == OMPD_parallel_for ||
+         DKind == OMPD_parallel_for_simd) {
+        cast<OMPExecutableDirective>(Directive.get())->setPrefetching(true);
+        CheckOpenMPPrefetchClauses(Directive);
+      }
+    }
+
     // Exit scope.
     Actions.EndOpenMPDSABlock(Directive.get());
     OMPDirectiveScope.Exit();
@@ -1563,7 +1677,7 @@ bool Parser::ParseOpenMPSimpleVarList(
 ///       thread_limit-clause | priority-clause | grainsize-clause |
 ///       nogroup-clause | num_tasks-clause | hint-clause | to-clause |
 ///       from-clause | is_device_ptr-clause | task_reduction-clause |
-///       in_reduction-clause | allocator-clause | allocate-clause
+///       in_reduction-clause | allocator-clause | allocate-clause | prefetch-clause
 ///
 OMPClause *Parser::ParseOpenMPClause(OpenMPDirectiveKind DKind,
                                      OpenMPClauseKind CKind, bool FirstClause) {
@@ -1710,6 +1824,7 @@ OMPClause *Parser::ParseOpenMPClause(OpenMPDirectiveKind DKind,
   case OMPC_use_device_ptr:
   case OMPC_is_device_ptr:
   case OMPC_allocate:
+  case OMPC_prefetch:
     Clause = ParseOpenMPVarListClause(DKind, CKind, WrongDirective);
     break;
   case OMPC_unknown:
@@ -1942,7 +2057,8 @@ OMPClause *Parser::ParseOpenMPSingleExprWithArgClause(OpenMPClauseKind Kind,
       ConsumeAnyToken();
     if ((Arg[ScheduleKind] == OMPC_SCHEDULE_static ||
          Arg[ScheduleKind] == OMPC_SCHEDULE_dynamic ||
-         Arg[ScheduleKind] == OMPC_SCHEDULE_guided) &&
+         Arg[ScheduleKind] == OMPC_SCHEDULE_guided ||
+	 Arg[ScheduleKind] == OMPC_SCHEDULE_hetprobe) &&
         Tok.is(tok::comma))
       DelimLoc = ConsumeAnyToken();
   } else if (Kind == OMPC_dist_schedule) {
@@ -2235,6 +2351,23 @@ bool Parser::ParseOpenMPVarList(OpenMPDirectiveKind DKind,
                                       : diag::warn_pragma_expected_colon)
           << "dependency type";
     }
+  } else if (Kind == OMPC_prefetch) {
+  // Handle permission type for prefetch clause.
+    ColonProtectionRAIIObject ColonRAII(*this);
+    Data.PrefKind = static_cast<OpenMPPrefetchClauseKind>(getOpenMPSimpleClauseType(
+        Kind, Tok.is(tok::identifier) ? PP.getSpelling(Tok) : ""));
+    Data.PrefLoc = Tok.getLocation();
+
+    if (Data.PrefKind == OMPC_PREFETCH_unknown) {
+      SkipUntil(tok::r_paren, tok::annot_pragma_openmp_end, StopBeforeMatch);
+      Diag(Data.PrefLoc, diag::err_omp_invalid_prefetch_kind) << true;
+    } else {
+      ConsumeToken(); // Keyword
+      if(Data.PrefKind == OMPC_PREFETCH_smart) {
+        T.consumeClose();
+      }
+      else ConsumeToken(); // Colon
+    }
   } else if (Kind == OMPC_linear) {
     // Try to parse modifier if any.
     if (Tok.is(tok::identifier) && PP.LookAhead(0).is(tok::l_paren)) {
@@ -2340,7 +2473,8 @@ bool Parser::ParseOpenMPVarList(OpenMPDirectiveKind DKind,
       (Kind == OMPC_reduction && !InvalidReductionId) ||
       (Kind == OMPC_map && Data.MapType != OMPC_MAP_unknown) ||
       (Kind == OMPC_depend && Data.DepKind != OMPC_DEPEND_unknown);
-  const bool MayHaveTail = (Kind == OMPC_linear || Kind == OMPC_aligned);
+  const bool MayHaveTail = (Kind == OMPC_linear || Kind == OMPC_aligned ||
+			    Kind == OMPC_prefetch);
   while (IsComma || (Tok.isNot(tok::r_paren) && Tok.isNot(tok::colon) &&
                      Tok.isNot(tok::annot_pragma_openmp_end))) {
     ColonProtectionRAIIObject ColonRAII(*this, MayHaveTail);
@@ -2380,6 +2514,20 @@ bool Parser::ParseOpenMPVarList(OpenMPDirectiveKind DKind,
         Actions.ActOnFinishFullExpr(Tail.get(), ELoc, /*DiscardedValue*/ false);
     if (Tail.isUsable())
       Data.TailExpr = Tail.get();
+    else
+      SkipUntil(tok::comma, tok::r_paren, tok::annot_pragma_openmp_end,
+                StopBeforeMatch);
+  }
+
+  // Parse ':' end.
+  Data.EndExpr = nullptr;
+  if (Kind == OMPC_prefetch && Tok.is(tok::colon)) {
+    Data.EndColonLoc = Tok.getLocation();
+    ConsumeToken();
+    ExprResult Tail =
+        Actions.CorrectDelayedTyposInExpr(ParseAssignmentExpression());
+    if (Tail.isUsable())
+      Data.EndExpr = Tail.get();
     else
       SkipUntil(tok::comma, tok::r_paren, tok::annot_pragma_openmp_end,
                 StopBeforeMatch);
@@ -2438,6 +2586,10 @@ bool Parser::ParseOpenMPVarList(OpenMPDirectiveKind DKind,
 ///       'is_device_ptr' '(' list ')'
 ///    allocate-clause:
 ///       'allocate' '(' [ allocator ':' ] list ')'
+///    prefetch-clause:
+///       'prefetch' '(' read | write ':' list [ ':' start ':' end ] ')'
+///                          or
+///                  '(' smart ')'
 ///
 /// For 'linear' clause linear-list may have the following forms:
 ///  list
@@ -2457,10 +2609,11 @@ OMPClause *Parser::ParseOpenMPVarListClause(OpenMPDirectiveKind DKind,
   if (ParseOnly)
     return nullptr;
   OMPVarListLocTy Locs(Loc, LOpen, Data.RLoc);
+
   return Actions.ActOnOpenMPVarListClause(
-      Kind, Vars, Data.TailExpr, Locs, Data.ColonLoc,
+      Kind, Vars, Data.TailExpr, Data.EndExpr, Locs, Data.ColonLoc, Data.EndColonLoc,
       Data.ReductionOrMapperIdScopeSpec, Data.ReductionOrMapperId, Data.DepKind,
       Data.LinKind, Data.MapTypeModifiers, Data.MapTypeModifiersLoc,
-      Data.MapType, Data.IsMapTypeImplicit, Data.DepLinMapLoc);
+      Data.MapType, Data.IsMapTypeImplicit, Data.DepLinMapLoc, Data.PrefKind, Data.PrefLoc);
 }
 

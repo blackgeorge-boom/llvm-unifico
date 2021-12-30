@@ -21,8 +21,11 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
+#include "llvm/CodeGen/StackMaps.h"
+#include "llvm/CodeGen/UnwindInfo.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCInstBuilder.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -33,10 +36,14 @@ using namespace llvm;
 
 namespace {
 class RISCVAsmPrinter : public AsmPrinter {
+protected:
+  StackMaps SM;
+  UnwindInfo UI;
+
 public:
   explicit RISCVAsmPrinter(TargetMachine &TM,
                            std::unique_ptr<MCStreamer> Streamer)
-      : AsmPrinter(TM, std::move(Streamer)) {}
+      : AsmPrinter(TM, std::move(Streamer)), SM(*this), UI(*this) {}
 
   StringRef getPassName() const override { return "RISCV Assembly Printer"; }
 
@@ -54,6 +61,24 @@ public:
   // Wrapper needed for tblgenned pseudo lowering.
   bool lowerOperand(const MachineOperand &MO, MCOperand &MCOp) const {
     return LowerRISCVMachineOperandToMCOperand(MO, MCOp, *this);
+  }
+
+  void EmitEndOfAsmFile(Module &M) override;
+  void LowerSTACKMAP(StackMaps &SM, const MachineInstr &MI);
+  void LowerPCN_STACKMAP(StackMaps &SM, const MachineInstr &MI);
+
+  bool runOnMachineFunction(MachineFunction &MF) override {
+    bool modified = TagCallSites(MF);
+    SetupMachineFunction(MF);
+    EmitFunctionBody();
+    if(MF.getFrameInfo().hasPcnStackMap())
+      UI.recordUnwindInfo(MF);
+    return modified;
+  }
+
+  bool doInitialization(Module &M) override {
+    SM.reset();
+    return AsmPrinter::doInitialization(M);
   }
 };
 }
@@ -75,6 +100,11 @@ void RISCVAsmPrinter::EmitInstruction(const MachineInstr *MI) {
   // Do any auto-generated pseudo lowerings.
   if (emitPseudoExpansionLowering(*OutStreamer, MI))
     return;
+
+  if (MI->getOpcode() == TargetOpcode::STACKMAP)
+    return LowerSTACKMAP(SM, *MI);
+  else if (MI->getOpcode() == TargetOpcode::PCN_STACKMAP)
+    return LowerPCN_STACKMAP(SM, *MI);
 
   MCInst TmpInst;
   LowerRISCVMachineInstrToMCInst(MI, TmpInst, *this);
@@ -138,6 +168,68 @@ bool RISCVAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
   }
 
   return AsmPrinter::PrintAsmMemoryOperand(MI, OpNo, ExtraCode, OS);
+}
+
+void RISCVAsmPrinter::EmitEndOfAsmFile(Module &M) {
+  UI.serializeToUnwindInfoSection();
+  SM.serializeToPcnStackMapSection(&UI);
+  UI.reset(); // Must reset after SM serialization to clear metadata
+}
+
+void RISCVAsmPrinter::LowerSTACKMAP(StackMaps &SM, const MachineInstr &MI) {
+  unsigned NumNOPBytes = MI.getOperand(1).getImm();
+
+  SM.recordStackMap(MI);
+  assert(NumNOPBytes % 4 == 0 && "Invalid number of NOP bytes requested!");
+
+  // Scan ahead to trim the shadow.
+  const MachineBasicBlock &MBB = *MI.getParent();
+  MachineBasicBlock::const_iterator MII(MI);
+  ++MII;
+  while (NumNOPBytes > 0) {
+    if (MII == MBB.end() || MII->isCall() ||
+        MII->getOpcode() == RISCV::DBG_VALUE ||
+        MII->getOpcode() == TargetOpcode::STACKMAP)
+      break;
+    ++MII;
+    NumNOPBytes -= 4;
+  }
+
+  // Emit nops.
+  for (unsigned i = 0; i < NumNOPBytes; i += 4)
+    EmitToStreamer(*OutStreamer,
+		  MCInstBuilder(RISCV::ADDI)
+		   .addReg(RISCV::X0)
+		   .addReg(RISCV::X0)
+		   .addImm(0));
+}
+
+void RISCVAsmPrinter::LowerPCN_STACKMAP(StackMaps &SM, const MachineInstr &MI) {
+  unsigned NumNOPBytes = MI.getOperand(1).getImm();
+
+  SM.recordPcnStackMap(MI);
+  assert(NumNOPBytes % 4 == 0 && "Invalid number of NOP bytes requested!");
+
+  // Scan ahead to trim the shadow.
+  const MachineBasicBlock &MBB = *MI.getParent();
+  MachineBasicBlock::const_iterator MII(MI);
+  ++MII;
+  while (NumNOPBytes > 0) {
+    if (MII == MBB.end() || MII->isCall() ||
+        MII->getOpcode() == RISCV::DBG_VALUE ||
+        MII->getOpcode() == TargetOpcode::STACKMAP)
+      break;
+    ++MII;
+    NumNOPBytes -= 4;
+  }
+
+  // Emit nops.
+  for (unsigned i = 0; i < NumNOPBytes; i += 4)
+    EmitToStreamer(*OutStreamer,
+		  MCInstBuilder(RISCV::ADDI)
+		   .addReg(RISCV::X0)
+		   .addReg(RISCV::X0)
+		   .addImm(0));
 }
 
 // Force static initialization.

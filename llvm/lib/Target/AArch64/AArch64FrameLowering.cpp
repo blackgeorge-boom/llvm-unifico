@@ -212,7 +212,7 @@ bool AArch64FrameLowering::hasFP(const MachineFunction &MF) const {
   if (MFI.hasCalls() && MF.getTarget().Options.DisableFramePointerElim(MF))
     return true;
   if (MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken() ||
-      MFI.hasStackMap() || MFI.hasPatchPoint() ||
+      MFI.hasStackMap() || MFI.hasPcnStackMap() || MFI.hasPatchPoint() ||
       RegInfo->needsStackRealignment(MF))
     return true;
   // With large callframes around we may need to use FP to access the scavenging
@@ -1534,6 +1534,15 @@ int AArch64FrameLowering::getSEHFrameIndexOffset(const MachineFunction &MF,
   return RegInfo->getLocalAddressRegister(MF) == AArch64::FP
              ? getFPOffset(MF, ObjectOffset)
              : getStackOffset(MF, ObjectOffset);
+}
+
+/// getFrameIndexReferenceFromFP - Provide a base+offset reference to an FI
+/// slot for debug info, but force base to be the frame pointer (x29).
+int
+AArch64FrameLowering::getFrameIndexReferenceFromFP(const MachineFunction &MF,
+                                                   int FI,
+                                                   unsigned &FrameReg) const {
+  return resolveFrameIndexReference(MF, FI, FrameReg, true, false);
 }
 
 int AArch64FrameLowering::resolveFrameIndexReference(const MachineFunction &MF,

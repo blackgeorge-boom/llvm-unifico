@@ -529,7 +529,7 @@ protected:
   bool selectBinaryOp(const User *I, unsigned ISDOpcode);
   bool selectFNeg(const User *I, const Value *In);
   bool selectGetElementPtr(const User *I);
-  bool selectStackmap(const CallInst *I);
+  bool selectStackmap(const CallInst *I, unsigned Opcode);
   bool selectPatchpoint(const CallInst *I);
   bool selectCall(const User *I);
   bool selectIntrinsicCall(const IntrinsicInst *II);

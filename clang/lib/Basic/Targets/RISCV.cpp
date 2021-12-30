@@ -72,6 +72,8 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
   Builder.defineMacro("__ELF__");
   Builder.defineMacro("__riscv");
   bool Is64Bit = getTriple().getArch() == llvm::Triple::riscv64;
+  if (Is64Bit)
+    Builder.defineMacro("__riscv64__");
   Builder.defineMacro("__riscv_xlen", Is64Bit ? "64" : "32");
   // TODO: modify when more code models are supported.
   Builder.defineMacro("__riscv_cmodel_medlow");

@@ -233,6 +233,10 @@ private:
   bool HasStackMap = false;
 
   /// This boolean keeps track of whether there is a call
+  /// to builtin \@llvm.experimental.pcn_stackmap.
+  bool HasPcnStackMap = false;
+  
+  /// This boolean keeps track of whether there is a call
   /// to builtin \@llvm.experimental.patchpoint.
   bool HasPatchPoint = false;
 
@@ -376,6 +380,12 @@ public:
   /// \@llvm.experimental.stackmap.
   bool hasStackMap() const { return HasStackMap; }
   void setHasStackMap(bool s = true) { HasStackMap = s; }
+
+  /// This method may be called any time after instruction
+  /// selection is complete to determine if there is a call to builtin
+  /// \@llvm.experimental.pcn.stackmap.
+  bool hasPcnStackMap() const { return HasPcnStackMap; }
+  void setHasPcnStackMap(bool s = true) { HasPcnStackMap = s; }
 
   /// This method may be called any time after instruction
   /// selection is complete to determine if there is a call to builtin

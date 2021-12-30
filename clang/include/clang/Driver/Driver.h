@@ -203,6 +203,9 @@ private:
   /// Raw target triple.
   std::string TargetTriple;
 
+  /// Default popcorn target triple.
+  std::string PopcornTargetTriple;
+
   /// Name to use when invoking gcc/g++.
   std::string CCCGenericGCCName;
 

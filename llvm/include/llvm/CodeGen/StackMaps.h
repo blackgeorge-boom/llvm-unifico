@@ -12,6 +12,7 @@
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/CodeGen/StackTransformTypes.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/Debug.h"
@@ -27,6 +28,7 @@ class MCExpr;
 class MCStreamer;
 class raw_ostream;
 class TargetRegisterInfo;
+class UnwindInfo;
 
 /// MI-level stackmap operands.
 ///
@@ -201,14 +203,35 @@ public:
       Constant,
       ConstantIndex
     };
-    LocationType Type = Unprocessed;
-    unsigned Size = 0;
-    unsigned Reg = 0;
-    int64_t Offset = 0;
+    LocationType Type;
+    unsigned Size;
+    unsigned Reg;
+    int64_t Offset;
+    bool Ptr;
+    bool Alloca;
+    bool Duplicate;
+    bool Temporary;
+    unsigned AllocaSize;
 
-    Location() = default;
+    Location() {
+      Type = Unprocessed;
+      Size = 0;
+      Reg = 0;
+      Offset = 0;
+      Ptr = false;
+      Alloca = false;
+      Duplicate = false;
+      Temporary = false;
+      AllocaSize = 0;
+    }
     Location(LocationType Type, unsigned Size, unsigned Reg, int64_t Offset)
         : Type(Type), Size(Size), Reg(Reg), Offset(Offset) {}
+    Location(LocationType Type, unsigned Size, unsigned Reg, int64_t Offset,
+	     bool Ptr, bool Alloca, bool Duplicate, bool Temporary,
+	     unsigned AllocaSize)
+        : Type(Type), Size(Size), Reg(Reg), Offset(Offset), Ptr(Ptr),
+          Alloca(Alloca), Duplicate(Duplicate), Temporary(Temporary),
+          AllocaSize(AllocaSize) {}
   };
 
   struct LiveOutReg {
@@ -222,10 +245,34 @@ public:
         : Reg(Reg), DwarfRegNum(DwarfRegNum), Size(Size) {}
   };
 
+  struct Operation {
+    ValueGenInst::InstType InstType;
+    Location::LocationType OperandType;
+    unsigned Size;
+    unsigned DwarfReg;
+    int64_t Constant;
+    bool isGenerated;
+    bool isSymbol;
+    const MCSymbol *Symbol;
+
+    Operation() {
+      Size = 0;
+      DwarfReg = 0;
+      Constant = 0;
+      isGenerated = false;
+      isSymbol = false;
+      Symbol = nullptr;
+    }
+    Operation(unsigned Size, unsigned DwarfReg, int64_t, bool isGenerated,
+	      bool isSymbol)
+      : Size(0), DwarfReg(0), Constant(0), isGenerated(false),
+        isSymbol(false), Symbol(nullptr) {}
+  };
+
   // OpTypes are used to encode information about the following logical
   // operand (which may consist of several MachineOperands) for the
   // OpParser.
-  using OpType = enum { DirectMemRefOp, IndirectMemRefOp, ConstantOp };
+  using OpType = enum { DirectMemRefOp, IndirectMemRefOp, ConstantOp, TemporaryOp };
 
   StackMaps(AsmPrinter &AP);
 
@@ -247,17 +294,28 @@ public:
     explicit FunctionInfo(uint64_t StackSize) : StackSize(StackSize) {}
   };
 
+  using ArchValue = std::pair<Location, Operation>;
+  using ArchValues = SmallVector<ArchValue, 8>;
+
   struct CallsiteInfo {
+    const MCSymbol *Func = nullptr;
     const MCExpr *CSOffsetExpr = nullptr;
     uint64_t ID = 0;
     LocationVec Locations;
     LiveOutVec LiveOuts;
+    ArchValues Vals;
 
     CallsiteInfo() = default;
     CallsiteInfo(const MCExpr *CSOffsetExpr, uint64_t ID,
                  LocationVec &&Locations, LiveOutVec &&LiveOuts)
         : CSOffsetExpr(CSOffsetExpr), ID(ID), Locations(std::move(Locations)),
           LiveOuts(std::move(LiveOuts)) {}
+    CallsiteInfo(const MCSymbol *Func, const MCExpr *CSOffsetExpr,
+		 uint64_t ID, LocationVec &&Locations,
+		 LiveOutVec &&LiveOuts, ArchValues &&Vals)
+        : Func(Func), CSOffsetExpr(CSOffsetExpr), ID(ID),
+	  Locations(std::move(Locations)),
+          LiveOuts(std::move(LiveOuts)), Vals(std::move(Vals)) {}
   };
 
   using FnInfoMap = MapVector<const MCSymbol *, FunctionInfo>;
@@ -268,6 +326,9 @@ public:
   /// MI must be a raw STACKMAP, not a PATCHPOINT.
   void recordStackMap(const MachineInstr &MI);
 
+  /// MI must be a raw PCN_STACKMAP, not a STACKMAP.
+  void recordPcnStackMap(const MachineInstr &MI);
+  
   /// Generate a stackmap record for a patchpoint instruction.
   void recordPatchPoint(const MachineInstr &MI);
 
@@ -278,6 +339,7 @@ public:
   /// the map info into it. This clears the stack map data structures
   /// afterwards.
   void serializeToStackMapSection();
+  void serializeToPcnStackMapSection(const UnwindInfo *UI = nullptr);
 
   /// Get call site info.
   CallsiteInfoList &getCSInfos() { return CSInfos; }
@@ -293,6 +355,23 @@ private:
   ConstantPool ConstPool;
   FnInfoMap FnInfos;
 
+  /// Get stackmap information for register location
+  void getRegLocation(unsigned Phys, unsigned &Dwarf, unsigned &Offset) const;
+
+  /// Get pointer typing information for stackmap operand
+  void getPointerInfo(const Value *Op, const DataLayout &DL, bool &isPtr,
+                      bool &isAlloca, unsigned &AllocaSize) const;
+
+  /// Add duplicate target-specific locations for a stackmap operand
+  void addDuplicateLocs(const CallInst *StackMap, const Value *Oper,
+                        LocationVec &Locs, unsigned Size, bool Ptr,
+                        bool Alloca, unsigned AllocaSize) const;
+
+  MachineInstr::const_mop_iterator
+  parsePcnOperand(MachineInstr::const_mop_iterator MOI,
+               MachineInstr::const_mop_iterator MOE, LocationVec &Locs,
+               LiveOutVec &LiveOuts, User::const_op_iterator &Op) const;
+
   MachineInstr::const_mop_iterator
   parseOperand(MachineInstr::const_mop_iterator MOI,
                MachineInstr::const_mop_iterator MOE, LocationVec &Locs,
@@ -306,6 +385,15 @@ private:
   /// registers that need to be recorded in the stackmap.
   LiveOutVec parseRegisterLiveOutMask(const uint32_t *Mask) const;
 
+  /// Convert a list of instructions used to generate an architecture-specific
+  /// live value into multiple individual records.
+  void genArchValsFromInsts(ArchValues &AV,
+                            Location &Loc,
+                            const MachineLiveVal &MLV);
+
+  /// Add architecture-specific locations for the stackmap.
+  void addArchLiveVals(const CallInst *SM, ArchValues &AV);
+
   /// This should be called by the MC lowering code _immediately_ before
   /// lowering the MI to an MCInst. It records where the operands for the
   /// instruction are stored, and outputs a label to record the offset of
@@ -316,17 +404,24 @@ private:
                            MachineInstr::const_mop_iterator MOE,
                            bool recordResult = false);
 
+  void recordPcnStackMapOpers(const MachineInstr &MI, uint64_t ID,
+			      MachineInstr::const_mop_iterator MOI,
+			      MachineInstr::const_mop_iterator MOE,
+			      bool recordResult = false);
+
   /// Emit the stackmap header.
   void emitStackmapHeader(MCStreamer &OS);
 
   /// Emit the function frame record for each function.
   void emitFunctionFrameRecords(MCStreamer &OS);
+  void emitPcnFunctionFrameRecords(MCStreamer &OS, const UnwindInfo *UI);
 
   /// Emit the constant pool.
   void emitConstantPoolEntries(MCStreamer &OS);
 
   /// Emit the callsite info for each stackmap/patchpoint intrinsic call.
   void emitCallsiteEntries(MCStreamer &OS);
+  void emitPcnCallsiteEntries(MCStreamer &OS);
 
   void print(raw_ostream &OS);
   void debug() { print(dbgs()); }

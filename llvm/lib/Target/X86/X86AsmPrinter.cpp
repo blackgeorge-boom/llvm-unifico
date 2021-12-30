@@ -24,6 +24,7 @@
 #include "llvm/CodeGen/MachineModuleInfoImpls.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Mangler.h"
 #include "llvm/IR/Module.h"
@@ -44,7 +45,8 @@ using namespace llvm;
 
 X86AsmPrinter::X86AsmPrinter(TargetMachine &TM,
                              std::unique_ptr<MCStreamer> Streamer)
-    : AsmPrinter(TM, std::move(Streamer)), SM(*this), FM(*this) {}
+  : AsmPrinter(TM, std::move(Streamer)), SM(*this), PSM(*this), UI(*this),
+    FM(*this) {}
 
 //===----------------------------------------------------------------------===//
 // Primitive Helper Functions.
@@ -54,6 +56,8 @@ X86AsmPrinter::X86AsmPrinter(TargetMachine &TM,
 ///
 bool X86AsmPrinter::runOnMachineFunction(MachineFunction &MF) {
   Subtarget = &MF.getSubtarget<X86Subtarget>();
+
+  bool modified = TagCallSites(MF);
 
   SMShadowTracker.startFunction(MF);
   CodeEmitter.reset(TM.getTarget().createMCCodeEmitter(
@@ -83,8 +87,17 @@ bool X86AsmPrinter::runOnMachineFunction(MachineFunction &MF) {
 
   EmitFPOData = false;
 
-  // We didn't modify anything.
-  return false;
+  // Add this function's register unwind info.  The x86 backend doesn't
+  // maintain the saved FBP (old RBP) and return address (RIP) as callee-saved
+  // registers, so manually add where they're saved.
+  if(MF.getFrameInfo().hasPcnStackMap()) {
+    UI.recordUnwindInfo(MF);
+    UI.addRegisterUnwindInfo(MF, X86::RIP, 8);
+    UI.addRegisterUnwindInfo(MF, X86::RBP, 0);
+  }
+
+  // We may have modified where stack map intrinsics are located.
+  return modified;
 }
 
 void X86AsmPrinter::EmitFunctionBodyStart() {
@@ -718,7 +731,10 @@ void X86AsmPrinter::EmitEndOfAsmFile(Module &M) {
     emitStackMaps(SM);
   } else if (TT.isOSBinFormatELF()) {
     emitStackMaps(SM);
+    UI.serializeToUnwindInfoSection();
+    PSM.serializeToPcnStackMapSection(&UI);
     FM.serializeToFaultMapSection();
+    UI.reset(); // Must reset after PSM serialization to clear metadata
   }
 }
 

@@ -753,6 +753,7 @@ private:
   void visitVAEnd(const CallInst &I);
   void visitVACopy(const CallInst &I);
   void visitStackmap(const CallInst &I);
+  void visitPcnStackmap(const CallInst &I);
   void visitPatchpoint(ImmutableCallSite CS,
                        const BasicBlock *EHPadBB = nullptr);
 

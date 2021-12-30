@@ -47,12 +47,15 @@ add_llvm_library(LLVMAnalysis
   LazyValueInfo.cpp
   LegacyDivergenceAnalysis.cpp
   Lint.cpp
+  LiveValues.cpp
   Loads.cpp
   LoopAccessAnalysis.cpp
   LoopAnalysisManager.cpp
   LoopUnrollAnalyzer.cpp
   LoopInfo.cpp
+  LoopNestingTree.cpp
   LoopPass.cpp
+  LoopPaths.cpp
   MemDepPrinter.cpp
   MemDerefPrinter.cpp
   MemoryBuiltins.cpp
@@ -71,6 +74,7 @@ add_llvm_library(LLVMAnalysis
   OrderedInstructions.cpp
   PHITransAddr.cpp
   PhiValues.cpp
+  PopcornCompatibility.cpp
   PostDominators.cpp
   ProfileSummaryInfo.cpp
   PtrUseVisitor.cpp
@@ -81,6 +85,7 @@ add_llvm_library(LLVMAnalysis
   ScalarEvolutionAliasAnalysis.cpp
   ScalarEvolutionExpander.cpp
   ScalarEvolutionNormalization.cpp
+  SelectMigrationPoints.cpp
   StackSafetyAnalysis.cpp
   SyncDependenceAnalysis.cpp
   SyntheticCountsUtils.cpp

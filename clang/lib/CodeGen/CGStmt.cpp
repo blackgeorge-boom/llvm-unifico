@@ -17,6 +17,7 @@
 #include "clang/AST/StmtVisitor.h"
 #include "clang/Basic/Builtins.h"
 #include "clang/Basic/PrettyStackTrace.h"
+#include "clang/CodeGen/PrefetchBuilder.h"
 #include "clang/Basic/TargetInfo.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/DataLayout.h"
@@ -850,6 +851,19 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
   JumpDest LoopExit = getJumpDestInCurrentScope("for.end");
 
   LexicalScope ForScope(*this, S.getSourceRange());
+
+  if(S.prefetchEnabled()) {
+    const PrefetchAnalysis *PA = getContext().getPrefetchAnalysis(&S);
+    if(PA) {
+      PrefetchBuilder PB(this);
+      const SmallVector<PrefetchRange, 8> &Pref = PA->getArraysToPrefetch();
+      if(Pref.size()) {
+        PB.EmitPrefetchCallDeclarations();
+        for(auto &Range : Pref) PB.EmitPrefetchCall(Range);
+        PB.EmitPrefetchExecuteCall();
+      }
+    }
+  }
 
   // Evaluate the first part before the loop.
   if (S.getInit())
@@ -2304,14 +2318,102 @@ void CodeGenFunction::EmitAsmStmt(const AsmStmt &S) {
   }
 }
 
+void CodeGenFunction::addOffloaded(const CapturedStmt *S, ValueDecl *L,
+                                   ValueDecl *G) {
+  assert(S && isa<CapturedStmt>(S) && "Invalid captured statement");
+  assert(L && G && "Invalid value declarations");
+  OffloadedLocals[S].emplace_back(L, G);
+}
+
+const CodeGenFunction::OffloadList &
+CodeGenFunction::getOffloaded(const CapturedStmt *S) const {
+  assert(S && isa<CapturedStmt>(S) && "Invalid captured statement");
+  OffloadMap::const_iterator it = OffloadedLocals.find(S);
+  assert((it != OffloadedLocals.end()) && "Captured statement not visited?");
+  return it->second;
+}
+
+VarDecl *CodeGenFunction::CreateOffloadedGlobal(const Stmt &S,
+                                                QualType Ty,
+                                                std::string &Name) {
+  ASTContext &AST = getContext();
+  DeclContext *TUC = AST.getTranslationUnitDecl();
+  SourceRange SR = S.getSourceRange();
+  IdentifierInfo *II = &AST.Idents.get("distr_omp_" +
+      std::string(CurFn->getName()) + "_" + Name);
+  if(Ty.isLocalConstQualified()) Ty.removeLocalConst();
+  TypeSourceInfo *TSI = AST.getTrivialTypeSourceInfo(Ty, SR.getBegin());
+  return VarDecl::Create(AST, TUC, SR.getBegin(), SR.getEnd(),
+                         II, Ty, TSI, clang::SC_Static);
+}
+
+VarDecl *CodeGenFunction::CreateOffloadedGlobal(const Stmt &S, const Expr *I) {
+  std::string name(cast<DeclRefExpr>(I)->getDecl()->getNameAsString());
+  return CreateOffloadedGlobal(S, I->getType(), name);
+}
+
+LValue CodeGenFunction::GetVarDeclLValue(QualType SrcType, VarDecl *VD) {
+  if(SrcType.isLocalConstQualified()) SrcType.removeLocalConst();
+  llvm::Type *Ty = CGM.getTypes().ConvertType(SrcType);
+  llvm::Constant *GV = CGM.GetAddrOfGlobalVar(VD, Ty);
+  llvm::GlobalVariable *CastGV = cast<llvm::GlobalVariable>(GV);
+  CastGV->setInitializer(llvm::Constant::getNullValue(Ty));
+  CastGV->setLinkage(llvm::GlobalValue::InternalLinkage);
+  return MakeNaturalAlignAddrLValue(GV, SrcType);
+}
+
+LValue CodeGenFunction::GetVarDeclLValue(const Expr *I, VarDecl *VD) {
+  return GetVarDeclLValue(I->getType(), VD);
+}
+
+DeclRefExpr *CodeGenFunction::GetDeclRefForOffload(ValueDecl *VD) {
+  ASTContext &AST = getContext();
+  QualType Ty = VD->getType();
+  DeclRefExpr *DRE = DeclRefExpr::Create(AST, NestedNameSpecifierLoc(),
+                                         SourceLocation(), VD, false,
+                                         VD->getSourceRange().getBegin(),
+                                         Ty, VK_LValue);
+  DRE->getDecl()->setIsUsed();
+  return DRE;
+}
+
+void CodeGenFunction::RestoreOffloadedLocals(const CapturedStmt *S) {
+  Expr *Global;
+  const OffloadList &Offloaded = getOffloaded(S);
+  for(auto Pair : Offloaded) {
+    if(Pair.first->getType().isLocalConstQualified()) continue;
+    LValue LocalLV(EmitDeclRefLValue(GetDeclRefForOffload(Pair.first)));
+    Global = GetDeclRefForOffload(Pair.second);
+    EmitAnyExprToMem(Global, LocalLV.getAddress(), LocalLV.getQuals(), false);
+  }
+}
+
 LValue CodeGenFunction::InitCapturedStruct(const CapturedStmt &S) {
   const RecordDecl *RD = S.getCapturedRecordDecl();
   QualType RecordTy = getContext().getRecordType(RD);
 
-  // Initialize the captured struct.
-  LValue SlotLV =
-    MakeAddrLValue(CreateMemTemp(RecordTy, "agg.captured"), RecordTy);
+  // We have to manually track the context number to avoid naming collisions
+  // for files with multiple captured regions
+  static int CtxNum = 0;
 
+  // Initialize the captured struct.
+  LValue SlotLV;
+  if(S.offloadShared()) {
+    // Name the captured context corresponding to the generated anonymous
+    // structure type for the context
+    std::string Name("agg.captured");
+    if(CtxNum) Name += "." + std::to_string(CtxNum - 1);
+    CtxNum++;
+
+    VarDecl *GlobalCtx = CreateOffloadedGlobal(S, RecordTy, Name);
+    SlotLV = GetVarDeclLValue(RecordTy, GlobalCtx);
+  }
+  else
+    SlotLV =
+      MakeAddrLValue(CreateMemTemp(RecordTy, "agg.captured"), RecordTy);
+
+  if(S.offloadShared()) OffloadedLocals[&S] = OffloadList();
+ 
   RecordDecl::field_iterator CurField = RD->field_begin();
   for (CapturedStmt::const_capture_init_iterator I = S.capture_init_begin(),
                                                  E = S.capture_init_end();
@@ -2321,7 +2423,17 @@ LValue CodeGenFunction::InitCapturedStruct(const CapturedStmt &S) {
       auto VAT = CurField->getCapturedVLAType();
       EmitStoreThroughLValue(RValue::get(VLASizeMap[VAT->getSizeExpr()]), LV);
     } else {
-      EmitInitializerForField(*CurField, LV, *I);
+      if(S.offloadShared() && isa<DeclRefExpr>(*I)) {
+        // If distributed, create global variable, emit initializer & place
+        // address of new global into capture struct
+        VarDecl *GLD = CreateOffloadedGlobal(S, *I);
+        LValue GLV = GetVarDeclLValue(*I, GLD);
+        EmitAnyExprToMem(*I, GLV.getAddress(), GLV.getQuals(), false);
+        Expr *GlobalRef = GetDeclRefForOffload(GLD);
+        EmitInitializerForField(*CurField, LV, GlobalRef);
+        addOffloaded(&S, cast<DeclRefExpr>(*I)->getDecl(), GLD);
+      }
+      else EmitInitializerForField(*CurField, LV, *I);
     }
   }
 

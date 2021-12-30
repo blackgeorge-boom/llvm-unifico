@@ -144,6 +144,8 @@ add_llvm_library(LLVMCodeGen
   StackMaps.cpp
   StackProtector.cpp
   StackSlotColoring.cpp
+  StackTransformMetadata.cpp
+  StackTransformTypes.cpp
   SwiftErrorValueTracking.cpp
   SwitchLoweringUtils.cpp
   TailDuplication.cpp
@@ -159,6 +161,7 @@ add_llvm_library(LLVMCodeGen
   TargetSubtargetInfo.cpp
   TwoAddressInstructionPass.cpp
   UnreachableBlockElim.cpp
+  UnwindInfo.cpp
   ValueTypes.cpp
   VirtRegMap.cpp
   WasmEHPrepare.cpp
@@ -170,6 +173,22 @@ add_llvm_library(LLVMCodeGen
   ${LLVM_MAIN_INCLUDE_DIR}/llvm/CodeGen/PBQP
 
   LINK_LIBS ${LLVM_PTHREAD_LIB}
+
+  LINK_COMPONENTS
+  Core
+  Support
+  MC
+  Analysis
+  TransformUtils
+  Target
+  BitWriter
+  BitReader
+  ScalarOpts
+  Instrumentation
+  ProfileData
+#  AArch64AsmParser
+#  RISCVAsmParser
+#  X86AsmParser 
 
   DEPENDS
   intrinsics_gen

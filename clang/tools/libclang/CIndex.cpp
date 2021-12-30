@@ -2438,6 +2438,10 @@ void OMPClauseEnqueue::VisitOMPUseDevicePtrClause(const OMPUseDevicePtrClause *C
 void OMPClauseEnqueue::VisitOMPIsDevicePtrClause(const OMPIsDevicePtrClause *C) {
   VisitOMPClauseList(C);
 }
+void OMPClauseEnqueue::VisitOMPPrefetchClause(const OMPPrefetchClause *C) {
+  // TODO Rob
+  llvm_unreachable("not yet implemented");
+}
 }
 
 void EnqueueVisitor::EnqueueChildren(const OMPClause *S) {

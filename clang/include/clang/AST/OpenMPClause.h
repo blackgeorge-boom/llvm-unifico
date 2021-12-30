@@ -6181,6 +6181,64 @@ public:
   }
 };
 
+/// This represents a memory prefetch request for Popcorn Linux.  This
+/// should only be used for prefetching contiguous blocks of memory, e.g.,
+/// arrays or pointers to chunks of memory.
+  class OMPPrefetchClause final
+    : public OMPVarListClause<OMPPrefetchClause>,
+      private llvm::TrailingObjects<OMPPrefetchClause, Expr *> {
+  friend OMPVarListClause;
+  friend TrailingObjects;
+
+private:
+  /// What type of prefetching to perform.
+  OpenMPPrefetchClauseKind Kind;
+
+  /// Expressions describing the memory range to be prefetched.
+  ///
+  /// 1. If both are nullptr, then the entire array should be prefetched
+  /// 2. If Start is valid and End is nullptr, then use the expression (which
+  ///    should be affine to a for-loop iteration variable) to prefetch the
+  ///    region of memory based on the loop iterations assigned to the thread
+  /// 3. If both Start and End are valid, then prefetch the absolute range
+  ///    denoted by the starting & ending expressions
+  Expr *Start, *End;
+
+  /// Locations of the kind specifier, colons used to separate the
+  /// variable list and range expression(s).  These are valid in conjunction
+  /// with Start & End, respectively.
+  SourceLocation KindLoc, FirstColonLoc, SecondColonLoc;
+
+  OMPPrefetchClause(SourceLocation StartLoc, SourceLocation LParenLoc,
+                    SourceLocation FirstColonLoc,
+                    SourceLocation SecondColonLoc, SourceLocation EndLoc,
+                    unsigned N)
+      : OMPVarListClause<OMPPrefetchClause>(OMPC_prefetch, StartLoc, LParenLoc,
+                                            EndLoc, N),
+        FirstColonLoc(FirstColonLoc), SecondColonLoc(SecondColonLoc) {}
+public:
+  static OMPPrefetchClause *
+  Create(const ASTContext &C, OpenMPPrefetchClauseKind Kind,
+         SourceLocation KindLoc, ArrayRef<Expr *> VL, Expr *Start, Expr *End,
+         SourceLocation StartLoc, SourceLocation LParenLoc,
+         SourceLocation FirstColonLoc, SourceLocation SecondColonLoc,
+         SourceLocation EndLoc);
+
+  OpenMPPrefetchClauseKind getPrefetchKind() const { return Kind; }
+  void setPrefetchKind(OpenMPPrefetchClauseKind Kind) { this->Kind = Kind; }
+
+  Expr *getStartOfRange() const { return Start; }
+  void setStartOfRange(Expr *Start) { this->Start = Start; }
+  Expr *getEndOfRange() const { return End; }
+  void setEndOfRange(Expr *End) { this->End = End; }
+
+  SourceLocation getPrefetchKindLoc() const { return KindLoc; }
+  void setPrefetchKindLoc(SourceLocation Loc) { KindLoc = Loc; }
+  SourceLocation getFirstColonLoc() const { return FirstColonLoc; }
+  SourceLocation getSecondColonLoc() const { return SecondColonLoc; }
+
+};
+
 /// This class implements a simple visitor for OMPClause
 /// subclasses.
 template<class ImplClass, template <typename> class Ptr, typename RetTy>

@@ -38,6 +38,27 @@ static cl::opt<bool> EnableTrapUnreachable("trap-unreachable",
   cl::Hidden, cl::ZeroOrMore, cl::init(false),
   cl::desc("Enable generating trap for unreachable"));
 
+// Popcorn-specific IR-level instrumentation
+enum PopcornInstrumentation {
+  none, // No instrumentation
+  metadata, // Only generate migration metadata, don't insert migration points
+  migpoints, // Only add migration points, don't generate rewriting metadata
+  migration, // Add migration points & generate rewriting metadata for migration
+  libc // Generate rewriting metadata for libc thread start functions
+};
+
+static cl::opt<PopcornInstrumentation> PopcornInstrument("popcorn-instrument",
+  cl::desc("Add Popcorn-specific instrumentation to applications"),
+  cl::init(none),
+  cl::values(
+    clEnumValN(none, "none", "No instrumentation (default)"),
+    clEnumValN(metadata, "metadata", "Only generate migration metadata (no migration points"),
+    clEnumValN(migpoints, "migpoints", "Only add migration points (no migration metadata)"),
+    clEnumValN(migration, "migration", "Add migration points & generate migration metadata"),
+    clEnumValN(libc, "libc", "Instrument libc thread start functions for migration")
+  )
+);
+
 void LLVMTargetMachine::initAsmInfo() {
   MRI.reset(TheTarget.createMCRegInfo(getTargetTriple().str()));
   MII.reset(TheTarget.createMCInstrInfo());
@@ -102,7 +123,35 @@ addPassesToGenerateCode(LLVMTargetMachine &TM, PassManagerBase &PM,
   TargetPassConfig *PassConfig = TM.createPassConfig(PM);
   // Set PassConfig options provided by TargetMachine.
   PassConfig->setDisableVerify(DisableVerify);
+
+  /// Popcorn compiler - multi-ISA binary configurations.  Requires that IR
+  /// passed to backends is identical, save for certain architecture-specific
+  /// quirks like atomic operations or intrinsics
+  if(PopcornInstrument != PopcornInstrumentation::none) {
+    TM.setArchIROptLevel(CodeGenOpt::None);
+
+    switch(PopcornInstrument) {
+    case PopcornInstrumentation::metadata:
+      PassConfig->setAddStackMaps(true);
+      break;
+    case PopcornInstrumentation::migpoints:
+      PassConfig->setAddMigrationPoints(true);
+      break;
+    case PopcornInstrumentation::migration:
+      PassConfig->setAddMigrationPoints(true);
+      PassConfig->setAddStackMaps(true);
+      break;
+    case PopcornInstrumentation::libc:
+      PassConfig->setAddLibcStackMaps(true);
+      break;
+    default:
+      llvm_unreachable("Invalid instrumentation type");
+      break;
+    }
+  }
+
   PM.add(PassConfig);
+  PassConfig->addPopcornPasses();
   PM.add(&MMI);
 
   if (PassConfig->addISelPasses())

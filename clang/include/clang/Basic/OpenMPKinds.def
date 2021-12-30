@@ -191,6 +191,9 @@
 #ifndef OPENMP_ALLOCATE_CLAUSE
 # define OPENMP_ALLOCATE_CLAUSE(Name)
 #endif
+#ifndef OPENMP_PREFETCH_KIND
+#define OPENMP_PREFETCH_KIND(Name)
+#endif
 
 // OpenMP directives.
 OPENMP_DIRECTIVE(threadprivate)
@@ -305,6 +308,7 @@ OPENMP_CLAUSE(reverse_offload, OMPReverseOffloadClause)
 OPENMP_CLAUSE(dynamic_allocators, OMPDynamicAllocatorsClause)
 OPENMP_CLAUSE(atomic_default_mem_order, OMPAtomicDefaultMemOrderClause)
 OPENMP_CLAUSE(allocate, OMPAllocateClause)
+OPENMP_CLAUSE(prefetch, OMPPrefetchClause)
 
 // Clauses allowed for OpenMP directive 'parallel'.
 OPENMP_PARALLEL_CLAUSE(if)
@@ -340,6 +344,7 @@ OPENMP_FOR_CLAUSE(ordered)
 OPENMP_FOR_CLAUSE(nowait)
 OPENMP_FOR_CLAUSE(linear)
 OPENMP_FOR_CLAUSE(allocate)
+OPENMP_FOR_CLAUSE(prefetch)
 
 // Clauses allowed for directive 'omp for simd'.
 OPENMP_FOR_SIMD_CLAUSE(private)
@@ -355,6 +360,7 @@ OPENMP_FOR_SIMD_CLAUSE(linear)
 OPENMP_FOR_SIMD_CLAUSE(aligned)
 OPENMP_FOR_SIMD_CLAUSE(ordered)
 OPENMP_FOR_SIMD_CLAUSE(allocate)
+OPENMP_FOR_SIMD_CLAUSE(prefetch)
 
 // Clauses allowed for OpenMP directive 'omp sections'.
 OPENMP_SECTIONS_CLAUSE(private)
@@ -389,6 +395,7 @@ OPENMP_SCHEDULE_KIND(dynamic)
 OPENMP_SCHEDULE_KIND(guided)
 OPENMP_SCHEDULE_KIND(auto)
 OPENMP_SCHEDULE_KIND(runtime)
+OPENMP_SCHEDULE_KIND(hetprobe)
 
 // Modifiers for 'schedule' clause.
 OPENMP_SCHEDULE_MODIFIER(monotonic)
@@ -414,6 +421,11 @@ OPENMP_LINEAR_KIND(val)
 OPENMP_LINEAR_KIND(ref)
 OPENMP_LINEAR_KIND(uval)
 
+// Static attributes for 'prefetch' clause.
+OPENMP_PREFETCH_KIND(read)
+OPENMP_PREFETCH_KIND(write)
+OPENMP_PREFETCH_KIND(smart)
+
 // Clauses allowed for OpenMP directive 'parallel for'.
 OPENMP_PARALLEL_FOR_CLAUSE(if)
 OPENMP_PARALLEL_FOR_CLAUSE(num_threads)
@@ -430,6 +442,7 @@ OPENMP_PARALLEL_FOR_CLAUSE(schedule)
 OPENMP_PARALLEL_FOR_CLAUSE(ordered)
 OPENMP_PARALLEL_FOR_CLAUSE(linear)
 OPENMP_PARALLEL_FOR_CLAUSE(allocate)
+OPENMP_PARALLEL_FOR_CLAUSE(prefetch)
 
 // Clauses allowed for OpenMP directive 'parallel for simd'.
 OPENMP_PARALLEL_FOR_SIMD_CLAUSE(if)
@@ -450,6 +463,7 @@ OPENMP_PARALLEL_FOR_SIMD_CLAUSE(linear)
 OPENMP_PARALLEL_FOR_SIMD_CLAUSE(aligned)
 OPENMP_PARALLEL_FOR_SIMD_CLAUSE(ordered)
 OPENMP_PARALLEL_FOR_SIMD_CLAUSE(allocate)
+OPENMP_PARALLEL_FOR_SIMD_CLAUSE(prefetch)
 
 // Clauses allowed for OpenMP directive 'parallel sections'.
 OPENMP_PARALLEL_SECTIONS_CLAUSE(if)
@@ -950,6 +964,7 @@ OPENMP_TASKGROUP_CLAUSE(allocate)
 // Clauses allowed for OpenMP directive 'declare mapper'.
 OPENMP_DECLARE_MAPPER_CLAUSE(map)
 
+#undef OPENMP_PREFETCH_KIND
 #undef OPENMP_ALLOCATE_CLAUSE
 #undef OPENMP_DECLARE_MAPPER_CLAUSE
 #undef OPENMP_TASKGROUP_CLAUSE

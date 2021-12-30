@@ -56,6 +56,7 @@ CreateFrontendBaseAction(CompilerInstance &CI) {
   case EmitLLVMOnly:           return llvm::make_unique<EmitLLVMOnlyAction>();
   case EmitCodeGenOnly:        return llvm::make_unique<EmitCodeGenOnlyAction>();
   case EmitObj:                return llvm::make_unique<EmitObjAction>();
+  case EmitMultiObj:           return llvm::make_unique<EmitMultiObjAction>();
   case FixIt:                  return llvm::make_unique<FixItAction>();
   case GenerateModule:
     return llvm::make_unique<GenerateModuleFromModuleMapAction>();

@@ -1333,6 +1333,7 @@ MachineBasicBlock *AArch64TargetLowering::EmitInstrWithCustomInserter(
     return EmitF128CSEL(MI, BB);
 
   case TargetOpcode::STACKMAP:
+  case TargetOpcode::PCN_STACKMAP:
   case TargetOpcode::PATCHPOINT:
     return emitPatchPoint(MI, BB);
 
@@ -2992,6 +2993,10 @@ SDValue AArch64TargetLowering::LowerOperation(SDValue Op,
     return LowerATOMIC_LOAD_AND(Op, DAG);
   case ISD::DYNAMIC_STACKALLOC:
     return LowerDYNAMIC_STACKALLOC(Op, DAG);
+  case (uint16_t)~TargetOpcode::STACKMAP:
+  case (uint16_t)~TargetOpcode::PCN_STACKMAP:
+    return SDValue(); // Use generic stackmap type legalizer
+
   }
 }
 

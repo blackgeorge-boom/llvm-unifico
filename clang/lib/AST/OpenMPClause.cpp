@@ -127,6 +127,7 @@ const OMPClauseWithPreInit *OMPClauseWithPreInit::get(const OMPClause *C) {
   case OMPC_reverse_offload:
   case OMPC_dynamic_allocators:
   case OMPC_atomic_default_mem_order:
+  case OMPC_prefetch:
     break;
   }
 
@@ -203,6 +204,7 @@ const OMPClauseWithPostUpdate *OMPClauseWithPostUpdate::get(const OMPClause *C) 
   case OMPC_reverse_offload:
   case OMPC_dynamic_allocators:
   case OMPC_atomic_default_mem_order:
+  case OMPC_prefetch:
     break;
   }
 
@@ -277,6 +279,26 @@ Expr *OMPOrderedClause::getLoopCounter(unsigned NumLoop) {
 const Expr *OMPOrderedClause::getLoopCounter(unsigned NumLoop) const {
   assert(NumLoop < NumberOfLoops && "out of loops number.");
   return getTrailingObjects<Expr *>()[NumberOfLoops + NumLoop];
+}
+
+OMPPrefetchClause *
+OMPPrefetchClause::Create(const ASTContext &C, OpenMPPrefetchClauseKind Kind,
+                          SourceLocation KindLoc, ArrayRef<Expr *> VL,
+                          Expr *Start, Expr *End, SourceLocation StartLoc,
+                          SourceLocation LParenLoc,
+                          SourceLocation FirstColonLoc,
+                          SourceLocation SecondColonLoc,
+                          SourceLocation EndLoc) {
+  void *Mem = C.Allocate(totalSizeToAlloc<Expr *>(VL.size()));
+  OMPPrefetchClause *Clause =
+    new (Mem) OMPPrefetchClause(StartLoc, LParenLoc, FirstColonLoc, SecondColonLoc,
+                                EndLoc, VL.size());
+  Clause->setPrefetchKind(Kind);
+  Clause->setPrefetchKindLoc(KindLoc);
+  Clause->setStartOfRange(Start);
+  Clause->setEndOfRange(End);
+  Clause->setVarRefs(VL);
+  return Clause;
 }
 
 void OMPPrivateClause::setPrivateCopies(ArrayRef<Expr *> VL) {
@@ -1597,3 +1619,17 @@ void OMPClausePrinter::VisitOMPIsDevicePtrClause(OMPIsDevicePtrClause *Node) {
   }
 }
 
+void OMPClausePrinter::VisitOMPPrefetchClause(OMPPrefetchClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "prefetch(";
+    OS << getOpenMPSimpleClauseTypeName(Node->getClauseKind(),
+                                        Node->getPrefetchKind())
+       << " :";
+    VisitOMPClauseList(Node, ' ');
+    OS << ",";
+    Node->getStartOfRange()->printPretty(OS, nullptr, Policy, 0);
+    OS << ",";
+    Node->getEndOfRange()->printPretty(OS, nullptr, Policy, 0);
+    OS << ")";
+  }
+}

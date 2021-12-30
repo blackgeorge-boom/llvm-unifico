@@ -297,7 +297,7 @@ public:
           Diags, HeaderSearchOpts, CodeGenOpts, TargetOpts, LangOpts,
           Ctx.getTargetInfo().getDataLayout(), M.get(),
           BackendAction::Backend_EmitLL,
-          llvm::make_unique<llvm::raw_svector_ostream>(Buffer));
+          llvm::make_unique<llvm::raw_svector_ostream>(Buffer).release());
       llvm::dbgs() << Buffer;
     });
 
@@ -305,7 +305,7 @@ public:
     clang::EmitBackendOutput(Diags, HeaderSearchOpts, CodeGenOpts, TargetOpts,
                              LangOpts, Ctx.getTargetInfo().getDataLayout(),
                              M.get(), BackendAction::Backend_EmitObj,
-                             std::move(OS));
+                             OS.release());
 
     // Free the memory for the temporary buffer.
     llvm::SmallVector<char, 0> Empty;

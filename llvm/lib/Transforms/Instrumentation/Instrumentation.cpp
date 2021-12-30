@@ -105,14 +105,17 @@ void llvm::initializeInstrumentation(PassRegistry &Registry) {
   initializeAddressSanitizerLegacyPassPass(Registry);
   initializeModuleAddressSanitizerLegacyPassPass(Registry);
   initializeBoundsCheckingLegacyPassPass(Registry);
+  initializeMigrationPointsPass(Registry);
   initializeControlHeightReductionLegacyPassPass(Registry);
   initializeGCOVProfilerLegacyPassPass(Registry);
+  initializeInsertStackMapsPass(Registry);
   initializePGOInstrumentationGenLegacyPassPass(Registry);
   initializePGOInstrumentationUseLegacyPassPass(Registry);
   initializePGOIndirectCallPromotionLegacyPassPass(Registry);
   initializePGOMemOPSizeOptLegacyPassPass(Registry);
   initializeInstrOrderFileLegacyPassPass(Registry);
   initializeInstrProfilingLegacyPassPass(Registry);
+  initializeLibcStackMapsPass(Registry);
   initializeMemorySanitizerLegacyPassPass(Registry);
   initializeHWAddressSanitizerLegacyPassPass(Registry);
   initializeThreadSanitizerLegacyPassPass(Registry);

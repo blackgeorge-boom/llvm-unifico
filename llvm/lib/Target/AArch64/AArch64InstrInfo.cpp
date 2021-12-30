@@ -99,6 +99,7 @@ unsigned AArch64InstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
     NumBytes = 0;
     break;
   case TargetOpcode::STACKMAP:
+  case TargetOpcode::PCN_STACKMAP:
     // The upper bound for a stackmap intrinsic is the full length of its shadow
     NumBytes = StackMapOpers(&MI).getNumPatchBytes();
     assert(NumBytes % 4 == 0 && "Invalid number of NOP bytes requested!");

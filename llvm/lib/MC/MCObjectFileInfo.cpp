@@ -285,8 +285,13 @@ void MCObjectFileInfo::initMachOMCObjectFileInfo(const Triple &T) {
   DwarfTUIndexSection =
       Ctx->getMachOSection("__DWARF", "__debug_tu_index", MachO::S_ATTR_DEBUG,
                            SectionKind::getMetadata());
+
   StackMapSection = Ctx->getMachOSection("__LLVM_STACKMAPS", "__llvm_stackmaps",
                                          0, SectionKind::getMetadata());
+
+  PcnStackMapSection = Ctx->getMachOSection("__LLVM_PCN_STACKMAPS",
+					    "__llvm_pcn_stackmaps",
+					    0, SectionKind::getMetadata());
 
   FaultMapSection = Ctx->getMachOSection("__LLVM_FAULTMAPS", "__llvm_faultmaps",
                                          0, SectionKind::getMetadata());
@@ -469,8 +474,21 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
   DwarfTUIndexSection =
       Ctx->getELFSection(".debug_tu_index", DebugSecType, 0);
 
+  UnwindAddrRangeSection =
+      Ctx->getELFSection(".stack_transform.unwind_arange", ELF::SHT_PROGBITS,
+                         0, sizeof(uint64_t) + sizeof(uint64_t),
+			 "");
+  UnwindInfoSection =
+      Ctx->getELFSection(".stack_transform.unwind", ELF::SHT_PROGBITS,
+			 0, sizeof(uint16_t) + sizeof(int16_t), "");
+  UnwindAddrRangeSection->setAlignment(sizeof(uint64_t));
+  UnwindInfoSection->setAlignment(sizeof(uint16_t) + sizeof(int16_t));
+
   StackMapSection =
       Ctx->getELFSection(".llvm_stackmaps", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
+
+  PcnStackMapSection =
+      Ctx->getELFSection(".llvm_pcn_stackmaps", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
 
   FaultMapSection =
       Ctx->getELFSection(".llvm_faultmaps", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);

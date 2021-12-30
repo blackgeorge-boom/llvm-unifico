@@ -259,7 +259,7 @@ def AArch64LOADgot       : SDNode<"AArch64ISD::LOADgot", SDTIntUnaryOp>;
 def AArch64callseq_start : SDNode<"ISD::CALLSEQ_START",
                                 SDCallSeqStart<[ SDTCisVT<0, i32>,
                                                  SDTCisVT<1, i32> ]>,
-                                [SDNPHasChain, SDNPOutGlue]>;
+                                [SDNPHasChain, SDNPInGlue, SDNPOutGlue]>;
 def AArch64callseq_end   : SDNode<"ISD::CALLSEQ_END",
                                 SDCallSeqEnd<[ SDTCisVT<0, i32>,
                                                SDTCisVT<1, i32> ]>,

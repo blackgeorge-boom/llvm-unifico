@@ -101,6 +101,7 @@ namespace {
       (void) llvm::createDomOnlyViewerPass();
       (void) llvm::createDomViewerPass();
       (void) llvm::createGCOVProfilerPass();
+      (void) llvm::createMigrationPointsPass();
       (void) llvm::createPGOInstrumentationGenLegacyPass();
       (void) llvm::createPGOInstrumentationUseLegacyPass();
       (void) llvm::createPGOInstrumentationGenCreateVarLegacyPass();
@@ -110,6 +111,7 @@ namespace {
       (void) llvm::createFunctionImportPass();
       (void) llvm::createFunctionInliningPass();
       (void) llvm::createAlwaysInlinerLegacyPass();
+      (void) llvm::createEnumerateLoopPathsPass();
       (void) llvm::createGlobalDCEPass();
       (void) llvm::createGlobalOptimizerPass();
       (void) llvm::createGlobalsAAWrapperPass();
@@ -119,12 +121,15 @@ namespace {
       (void) llvm::createIPSCCPPass();
       (void) llvm::createInductiveRangeCheckEliminationPass();
       (void) llvm::createIndVarSimplifyPass();
+      (void) llvm::createInsertStackMapsPass();
       (void) llvm::createInstSimplifyLegacyPass();
       (void) llvm::createInstructionCombiningPass();
       (void) llvm::createInternalizePass();
       (void) llvm::createLCSSAPass();
       (void) llvm::createLegacyDivergenceAnalysisPass();
+      (void) llvm::createLibcStackMapsPass();
       (void) llvm::createLICMPass();
+      (void) llvm::createLiveValuesPass();
       (void) llvm::createLoopSinkPass();
       (void) llvm::createLazyValueInfoPass();
       (void) llvm::createLoopExtractorPass();
@@ -154,6 +159,7 @@ namespace {
       (void) llvm::createPromoteMemoryToRegisterPass();
       (void) llvm::createDemoteRegisterToMemoryPass();
       (void) llvm::createPruneEHPass();
+      (void) llvm::createPopcornCompatibilityPass();
       (void) llvm::createPostDomOnlyPrinterPass();
       (void) llvm::createPostDomPrinterPass();
       (void) llvm::createPostDomOnlyViewerPass();
@@ -214,6 +220,7 @@ namespace {
       (void) llvm::createLoadStoreVectorizerPass();
       (void) llvm::createPartiallyInlineLibCallsPass();
       (void) llvm::createScalarizerPass();
+      (void) llvm::createSelectMigrationPointsPass();
       (void) llvm::createSeparateConstOffsetFromGEPPass();
       (void) llvm::createSpeculativeExecutionPass();
       (void) llvm::createSpeculativeExecutionIfHasBranchDivergencePass();
