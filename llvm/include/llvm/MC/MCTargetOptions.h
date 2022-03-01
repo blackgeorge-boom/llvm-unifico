@@ -76,6 +76,14 @@ public:
   /// In aarch64 the number of padding must be a multiple of 4.
   std::string CallsitePaddingFilename;
 
+  /// Disable alignment at the beginning of basic blocks.
+  /// When aligning the callsites, we want the second compilation to be
+  /// identical with the first, with the only difference of callsite padding.
+  /// If we allow alignment at the beginning of basic blocks,
+  /// sometimes the second compilation includes additional alignment of blocks,
+  /// on top of callsite padding, which ruins the callsite alignment.
+  bool DisableBlockAlign;
+
   /// Additional paths to search for `.include` directives when using the
   /// integrated assembler.
   std::vector<std::string> IASSearchPaths;

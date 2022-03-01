@@ -70,6 +70,10 @@ OutputFilename("o", cl::desc("Output filename"), cl::value_desc("filename"));
 static cl::opt<std::string>
 CallsitePaddingFilename("callsite-padding", cl::desc("JSON file with padding values for callsites"), cl::value_desc("filename"));
 
+static cl::opt<bool> DisableBlockAlign("disable-block-align",
+                                cl::desc("Disable alignment at the beginning of basic blocks."),
+                                cl::init(false));
+
 static cl::opt<std::string>
     SplitDwarfOutputFile("split-dwarf-output",
                          cl::desc(".dwo output filename"),
@@ -458,6 +462,7 @@ static int compileModule(char **argv, LLVMContext &Context) {
   Options.MCOptions.IASSearchPaths = IncludeDirs;
   Options.MCOptions.SplitDwarfFile = SplitDwarfFile;
   Options.MCOptions.CallsitePaddingFilename = CallsitePaddingFilename;
+  Options.MCOptions.DisableBlockAlign = DisableBlockAlign;
 
   std::unique_ptr<TargetMachine> Target(TheTarget->createTargetMachine(
       TheTriple.getTriple(), CPUStr, FeaturesStr, Options, getRelocModel(),
