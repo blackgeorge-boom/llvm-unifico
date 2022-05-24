@@ -84,6 +84,10 @@ static cl::opt<int>
                             cl::desc("Set the alignment of single callee-saved registers for AArch64 (defaults to 16)."),
                             cl::init(16));
 
+static cl::opt<bool>
+    RegisterScavengingSpillSlot("reg-scavenging-slot",
+                                cl::desc("Always reserve a special spill slot for register scavenging."), cl::init(false));
+
 static cl::opt<std::string>
     SplitDwarfOutputFile("split-dwarf-output",
                          cl::desc(".dwo output filename"),
@@ -475,6 +479,7 @@ static int compileModule(char **argv, LLVMContext &Context) {
   Options.MCOptions.DisableBlockAlign = DisableBlockAlign;
   Options.MCOptions.DisableX86FrameObjOrder = DisableX86FrameObjOrder;
   Options.MCOptions.AArch64CSRAlignment = AArch64CSRAlignment;
+  Options.MCOptions.RegisterScavengingSpillSlot = RegisterScavengingSpillSlot;
 
   std::unique_ptr<TargetMachine> Target(TheTarget->createTargetMachine(
       TheTriple.getTriple(), CPUStr, FeaturesStr, Options, getRelocModel(),

@@ -94,6 +94,11 @@ public:
   /// for keeping the same stack layout with X86.
   int AArch64CSRAlignment;
 
+  /// Reserve a special spill slot to facilitate register scavenging.
+  /// AArch64 does that for large stacks (> 255 bytes), but will we will do
+  /// that conservatively for both cases, X86 and AArch64.
+  int RegisterScavengingSpillSlot;
+
   /// Additional paths to search for `.include` directives when using the
   /// integrated assembler.
   std::vector<std::string> IASSearchPaths;
