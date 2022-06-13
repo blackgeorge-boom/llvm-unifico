@@ -11,8 +11,8 @@ The docker images for UnASL are split in two parts:
   - musl libc: required for static binary building
 
 
-2) UnASL compiler image: This sets up the UnASL compiler along with supporting repository for its Make invocation.  
-   This includes:
+2) UnASL compiler image: This sets up the UnASL compiler along with supporting repository for its Make invocation.
+This includes:
    - LLVM/Clang custom UnASL toolchain: the UnASL compiler to generate stack aligned binaries for x86-64 and AArch64
    - UnASL repository: containing Make tools, scripts and benchmarks
 
@@ -66,6 +66,16 @@ If the build requires access to private repositories, add the option:
 
 assuming that `ssh-agent` is running, its standard environment is load (e.g., by executing `$(eval ssh-agent -s)`
 and the appropriate keys have been adding (e.g., by using `ssh-add`).
+
+## Scripts
+
+The directory `scripts` contains a template examples of various Docker invocations.
+
+Currently, these are:
+
+- `build-docker-unasl-compiler.sh` an example script that can be used as a base for cron jobs.  
+  This script requires that the `keychain` and `openssh` are installed and that there is a private SSH cert available
+  that can be used for accessing private repositories within Docker as described above.
 
 
 ## Other
