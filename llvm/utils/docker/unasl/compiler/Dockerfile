@@ -57,7 +57,8 @@ RUN apt-get update && \
       apt-get install -y --no-install-recommends binutils libstdc++-11-dev \
       libstdc++-11-dev-arm64-cross ca-certificates gnupg build-essential \
       python wget unzip git nano ninja-build cmake zip gdb python3 tzdata \
-      gcc-aarch64-linux-gnu g++-aarch64-linux-gnu && \
+      gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+      gcc-x86-64-linux-gnu g++-x86-64-linux-gnu && \
       rm -rf /var/lib/apt/lists/*
 
 # copy build results of previous stage
