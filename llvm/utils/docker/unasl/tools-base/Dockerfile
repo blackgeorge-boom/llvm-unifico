@@ -27,7 +27,7 @@ RUN apt-get update && \
 
 RUN git clone https://github.com/blackgeorge-boom/llvm-project.git ${LLVM_DIR}
 
-RUN git -C ${LLVM_DIR} checkout dev-unasl-docker && \
+RUN git -C ${LLVM_DIR} checkout development && \
       cp ${LLVM_DIR}/llvm/utils/docker/scripts/build-unasl-llvm.sh . && \
       cp -r ${LLVM_DIR}/llvm/utils/docker/unasl/patches . && \
       git -C ${LLVM_DIR} checkout llvmorg-9.0.1 && \

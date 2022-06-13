@@ -32,10 +32,9 @@ RUN --mount=type=ssh git clone git@github.com:systems-nuts/UnASL.git ${UNASL_DIR
 
 # build and install custom llvm
 RUN git clone https://github.com/blackgeorge-boom/llvm-project.git ${LLVM_DIR} && \
-      git -C ${LLVM_DIR} checkout dev-unasl-docker && \
+      git -C ${LLVM_DIR} checkout development && \
       cp ${LLVM_DIR}/llvm/utils/docker/scripts/build-unasl-llvm.sh . && \
       cp -r ${LLVM_DIR}/llvm/utils/docker/unasl/patches . && \
-      git -C ${LLVM_DIR} checkout development && \
       cd ${LLVM_DIR} && patch -p1 < ../patches/llvmorg-9.0.1.patch && cd - && \
       mkdir build-llvm-unasl && \
       ./build-unasl-llvm.sh ${LLVM_DIR}/llvm ./build-llvm-unasl ${TOOLS_DIR}/toolchain-unasl ${build_type} && \
