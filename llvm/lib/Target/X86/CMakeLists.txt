@@ -71,7 +71,7 @@ set(sources
   X86Values.cpp
   )
 
-add_llvm_target(X86CodeGen ${sources})
+add_llvm_target(X86CodeGen ${sources} LINK_LIBS LLVMScalarOpts)
 
 add_subdirectory(AsmParser)
 add_subdirectory(Disassembler)
