@@ -1336,7 +1336,7 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
              ObjectIndexEnd = MFI->getObjectIndexEnd();
          StackSlotIndex < ObjectIndexEnd; StackSlotIndex++) {
 
-      MachineLiveValPtr MachineLiveValue;
+      MachineLiveValPtr MLV;
       MachineLiveStackSlot MachineLiveStackSlotValue(0);
 
       if(UsedSS.count(StackSlotIndex) && !MFI->isDeadObjectIndex(StackSlotIndex) &&
@@ -1380,10 +1380,10 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
                 }
 
                 SeenDefs.insert(DefinitionMI);
-                sanitizeVregs(MachineLiveValue, MISM);
-                MachineLiveValue = TVG->getMachineValue(DefinitionMI);
+                sanitizeVregs(MLV, MISM);
+                MLV = TVG->getMachineValue(DefinitionMI);
 
-                if(MachineLiveValue)
+                if (MLV)
                   break; // We got a value!
 
                 LLVM_DEBUG(dbgs() << "WARNING: Could not find a value for unhandled stack slot.\n");
@@ -1391,12 +1391,14 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
 
               } while (TargetRegisterInfo::isVirtualRegister(ChainVreg));
 
-              if(MachineLiveValue) {
+              if (MLV) {
                 LLVM_DEBUG(dbgs() << "      Defining instruction: ";
-                               MachineLiveValue->getDefiningInst()->print(dbgs());
-                               dbgs() << "      Value: " << MachineLiveValue->toString() << "\n");
+                           MLV->getDefiningInst()->print(dbgs());
+                           dbgs()
+                           << "      Value: " << MLV->toString() << "\n");
                 MachineLiveStackSlotValue.setStackSlot(StackSlotIndex);
-                MF->addSMArchSpecificLocation(IRSM, MachineLiveStackSlotValue, *MachineLiveValue);
+                MF->addSMArchSpecificLocation(IRSM, MachineLiveStackSlotValue,
+                                              *MLV);
                 CurSS.emplace(StackSlotIndex, ValueVecPtr(nullptr));
               }
 
