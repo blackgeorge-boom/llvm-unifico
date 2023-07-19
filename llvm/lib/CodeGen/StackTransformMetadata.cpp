@@ -1375,7 +1375,11 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
                   DefinitionMI = *NewDefs.begin();
                 }
                 else {
-                  LLVM_DEBUG(dbgs() << "WARNING: Unhandled multiple definitions case in arch-specific slot.\n");
+                  LLVM_DEBUG(dbgs()
+                                 << "WARNING: Unhandled multiple definitions "
+                                    "case in arch-specific slot.\n";
+                             for (auto NewDef
+                                  : NewDefs) { dbgs() << "  " << *NewDef; });
                   break;
                 }
 
