@@ -61,10 +61,18 @@ def W0    : AArch64Reg<0,   "w0" >, DwarfRegNum<[0]>;
 def W1    : AArch64Reg<1,   "w1" >, DwarfRegNum<[1]>;
 def W2    : AArch64Reg<2,   "w2" >, DwarfRegNum<[2]>;
 def W3    : AArch64Reg<3,   "w3" >, DwarfRegNum<[3]>;
+
+#ifdef UNIFICO_REG_COST
+let CostPerUse = 1 in {
+#endif
 def W4    : AArch64Reg<4,   "w4" >, DwarfRegNum<[4]>;
 def W5    : AArch64Reg<5,   "w5" >, DwarfRegNum<[5]>;
 def W6    : AArch64Reg<6,   "w6" >, DwarfRegNum<[6]>;
 def W7    : AArch64Reg<7,   "w7" >, DwarfRegNum<[7]>;
+#ifdef UNIFICO_REG_COST
+}
+#endif
+
 def W8    : AArch64Reg<8,   "w8" >, DwarfRegNum<[8]>;
 def W9    : AArch64Reg<9,   "w9" >, DwarfRegNum<[9]>;
 def W10   : AArch64Reg<10, "w10">, DwarfRegNum<[10]>;
@@ -73,11 +81,27 @@ def W12   : AArch64Reg<12, "w12">, DwarfRegNum<[12]>;
 def W13   : AArch64Reg<13, "w13">, DwarfRegNum<[13]>;
 def W14   : AArch64Reg<14, "w14">, DwarfRegNum<[14]>;
 def W15   : AArch64Reg<15, "w15">, DwarfRegNum<[15]>;
+
+#ifdef UNIFICO_REG_COST
+let CostPerUse = 1 in {
+#endif
 def W16   : AArch64Reg<16, "w16">, DwarfRegNum<[16]>;
 def W17   : AArch64Reg<17, "w17">, DwarfRegNum<[17]>;
 def W18   : AArch64Reg<18, "w18">, DwarfRegNum<[18]>;
+#ifdef UNIFICO_REG_COST
+}
+#endif
+
 def W19   : AArch64Reg<19, "w19">, DwarfRegNum<[19]>;
+
+#ifdef UNIFICO_REG_COST
+let CostPerUse = 1 in {
+#endif
 def W20   : AArch64Reg<20, "w20">, DwarfRegNum<[20]>;
+#ifdef UNIFICO_REG_COST
+}
+#endif
+
 def W21   : AArch64Reg<21, "w21">, DwarfRegNum<[21]>;
 def W22   : AArch64Reg<22, "w22">, DwarfRegNum<[22]>;
 def W23   : AArch64Reg<23, "w23">, DwarfRegNum<[23]>;
@@ -96,10 +120,18 @@ def X0    : AArch64Reg<0,   "x0",  [W0]>, DwarfRegAlias<W0>;
 def X1    : AArch64Reg<1,   "x1",  [W1]>, DwarfRegAlias<W1>;
 def X2    : AArch64Reg<2,   "x2",  [W2]>, DwarfRegAlias<W2>;
 def X3    : AArch64Reg<3,   "x3",  [W3]>, DwarfRegAlias<W3>;
+
+#ifdef UNIFICO_REG_COST
+let CostPerUse = 1 in {
+#endif
 def X4    : AArch64Reg<4,   "x4",  [W4]>, DwarfRegAlias<W4>;
 def X5    : AArch64Reg<5,   "x5",  [W5]>, DwarfRegAlias<W5>;
 def X6    : AArch64Reg<6,   "x6",  [W6]>, DwarfRegAlias<W6>;
 def X7    : AArch64Reg<7,   "x7",  [W7]>, DwarfRegAlias<W7>;
+#ifdef UNIFICO_REG_COST
+}
+#endif
+
 def X8    : AArch64Reg<8,   "x8",  [W8]>, DwarfRegAlias<W8>;
 def X9    : AArch64Reg<9,   "x9",  [W9]>, DwarfRegAlias<W9>;
 def X10   : AArch64Reg<10, "x10", [W10]>, DwarfRegAlias<W10>;
@@ -108,11 +140,27 @@ def X12   : AArch64Reg<12, "x12", [W12]>, DwarfRegAlias<W12>;
 def X13   : AArch64Reg<13, "x13", [W13]>, DwarfRegAlias<W13>;
 def X14   : AArch64Reg<14, "x14", [W14]>, DwarfRegAlias<W14>;
 def X15   : AArch64Reg<15, "x15", [W15]>, DwarfRegAlias<W15>;
+
+#ifdef UNIFICO_REG_COST
+let CostPerUse = 1 in {
+#endif
 def X16   : AArch64Reg<16, "x16", [W16]>, DwarfRegAlias<W16>;
 def X17   : AArch64Reg<17, "x17", [W17]>, DwarfRegAlias<W17>;
 def X18   : AArch64Reg<18, "x18", [W18]>, DwarfRegAlias<W18>;
+#ifdef UNIFICO_REG_COST
+}
+#endif
+
 def X19   : AArch64Reg<19, "x19", [W19]>, DwarfRegAlias<W19>;
+
+#ifdef UNIFICO_REG_COST
+let CostPerUse = 1 in {
+#endif
 def X20   : AArch64Reg<20, "x20", [W20]>, DwarfRegAlias<W20>;
+#ifdef UNIFICO_REG_COST
+}
+#endif
+
 def X21   : AArch64Reg<21, "x21", [W21]>, DwarfRegAlias<W21>;
 def X22   : AArch64Reg<22, "x22", [W22]>, DwarfRegAlias<W22>;
 def X23   : AArch64Reg<23, "x23", [W23]>, DwarfRegAlias<W23>;
@@ -138,42 +186,52 @@ def FFR : AArch64Reg<0, "ffr">, DwarfRegNum<[47]>;
 
 #ifndef UNIFICO_GPR_CALLING_CONV
 def GPR32common : RegisterClass<"AArch64", [i32], 32, (sequence "W%u", 0, 30)> {
-#else
-def GPR32common : RegisterClass<"AArch64", [i32], 32,
-                                (add (sequence "W%u", 0, 8), (sequence "W%u", 16, 20), W29, W30)> {
-#endif
   let AltOrders = [(rotl GPR32common, 8)];
   let AltOrderSelect = [{ return 1; }];
+#else
+def GPR32common : RegisterClass<"AArch64", [i32], 32,
+                                (add W8, W3, W2, W1, W0, W19, W29, W30,
+                                     W4, W5, W6, W7, W18, W20, W16, W17)> {
+#endif
 }
 
 def GPR64common : RegisterClass<"AArch64", [i64], 64,
 #ifndef UNIFICO_GPR_CALLING_CONV
                                 (add (sequence "X%u", 0, 28), FP, LR)> {
-#else
-                                (add (sequence "X%u", 0, 8), (sequence "X%u", 16, 20), FP, LR)> {
-#endif
   let AltOrders = [(rotl GPR64common, 8)];
   let AltOrderSelect = [{ return 1; }];
+#else
+                                (add X8, X3, X2, X1, X0, X4, X5, X6, X7,
+                                     X19, X18, X20, X16, X17, FP, LR)> {
+#endif
 }
 
 // GPR register classes which exclude SP/WSP.
 def GPR32 : RegisterClass<"AArch64", [i32], 32, (add GPR32common, WZR)> {
+#ifndef UNIFICO_GPR_CALLING_CONV
   let AltOrders = [(rotl GPR32, 8)];
   let AltOrderSelect = [{ return 1; }];
+#endif
 }
 def GPR64 : RegisterClass<"AArch64", [i64], 64, (add GPR64common, XZR)> {
+#ifndef UNIFICO_GPR_CALLING_CONV
   let AltOrders = [(rotl GPR64, 8)];
   let AltOrderSelect = [{ return 1; }];
+#endif
 }
 
 // GPR register classes which include SP/WSP.
 def GPR32sp : RegisterClass<"AArch64", [i32], 32, (add GPR32common, WSP)> {
+#ifndef UNIFICO_GPR_CALLING_CONV
   let AltOrders = [(rotl GPR32sp, 8)];
   let AltOrderSelect = [{ return 1; }];
+#endif
 }
 def GPR64sp : RegisterClass<"AArch64", [i64], 64, (add GPR64common, SP)> {
+#ifndef UNIFICO_GPR_CALLING_CONV
   let AltOrders = [(rotl GPR64sp, 8)];
   let AltOrderSelect = [{ return 1; }];
+#endif
 }
 
 #ifdef UNIFICO_REGALLOC_RULES
@@ -182,18 +240,12 @@ def GPR64sp : RegisterClass<"AArch64", [i64], 64, (add GPR64common, SP)> {
 // since for X86 we are using MOV32r0 instead, which for now we only assign to temporary registers.
 // This will be achieved through calling `TargetRegisterInfo::getMinimalPhysRegClass`.
 def GPR32temp : RegisterClass<"AArch64", [i32], 32,
-                                (add (sequence "W%u", 0, 8), (sequence "W%u", 16, 18), WZR)> {
-  let AltOrders = [(rotl GPR32temp, 8)];
-  let AltOrderSelect = [{ return 1; }];
-}
+                                (add W8, W3, W2, W1, W0, W4, W5, W6, W7, W18, W16, W17, WZR)>;
 #endif
 
 #ifdef UNIFICO_REMAT_RULES
 def GPR64temp : RegisterClass<"AArch64", [i64], 64,
-                                (add (sequence "X%u", 6, 8), (sequence "X%u", 16, 18))> {
-  let AltOrders = [(rotl GPR64temp, 8)];
-  let AltOrderSelect = [{ return 1; }];
-}
+                                (add X8, X3, X2, X1, X0, X4, X5, X6, X7, X18, X16, X17, XZR)>;
 #endif
 
 def GPR32sponly : RegisterClass<"AArch64", [i32], 32, (add WSP)>;
