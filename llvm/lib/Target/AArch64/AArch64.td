@@ -373,8 +373,8 @@ def FeatureAvoidUMADDL : SubtargetFeature<"avoid-wide-mul-add", "AvoidUMADDL",
 
 // Whether to enable the `requiresRegClassOfCopiedReg` check or not.
 // See TargetRegisterInfo.h for more details.
-def FeatureCopyWZRToTemp : SubtargetFeature<"copy-wzr-temp", "HasCopyWZRToTemp",
-    "true", "Copy the wzr register only to temporary registers.">;
+def FeatureCopyZRToTemp : SubtargetFeature<"copy-zr-temp", "HasCopyZRToTemp",
+    "true", "Copy the wzr/xzr registers only to temporary registers.">;
 
 //===----------------------------------------------------------------------===//
 // Architectures.
