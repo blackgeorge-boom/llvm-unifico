@@ -135,7 +135,7 @@ X86RegisterInfo::getLargestLegalSuperClass(const TargetRegisterClass *RC,
   // use of callee-saved registers in the GR32 register class. We currently
   // don't have any useful case of inflating to the super-class, which contains
   // CSRs, so we don't do anything here.
-  if (DisableGR32tempInflate && RC == &X86::GR32tempRegClass)
+  if (DisableGR32tempInflate && (RC == &X86::GR32tempRegClass || RC == &X86::GR64_with_sub_32bit_in_GR32tempRegClass))
     return RC;
 
   const X86Subtarget &Subtarget = MF.getSubtarget<X86Subtarget>();
