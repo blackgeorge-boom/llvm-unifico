@@ -1060,7 +1060,10 @@ StackTransformMetadata::findAlternateVregLocs(const SMInstBundle &SM) {
               searchStackSlotCopies(ss, IRVals, SM, Visited, work, true);
             }
             break;
-          default: llvm_unreachable("Unknown/invalid location type"); break;
+          default:
+            llvm_unreachable(
+                "Unknown/invalid location type in findAlternateVregLocs defs");
+            break;
           }
         }
       }
@@ -1107,7 +1110,10 @@ StackTransformMetadata::findAlternateVregLocs(const SMInstBundle &SM) {
             searchStackSlotCopies(ss, IRVals, SM, Visited, work, false);
           }
           break;
-        default: llvm_unreachable("Unknown/invalid location type"); break;
+        default:
+          llvm_unreachable(
+              "Unknown/invalid location type in findAlternateVregLocs uses");
+          break;
         }
       }
     }
@@ -1274,19 +1280,18 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
 
           // Try to find a suitable defining instruction
           if(NewDefs.size() == 0) {
-            LLVM_DEBUG(dbgs() << "WARNING: no unseen definition\n");
+            LLVM_DEBUG(dbgs() << "    WARNING: no unseen definition\n");
             break;
           }
           else if(NewDefs.size() == 1) DefMI = *NewDefs.begin();
           else if(!(DefMI = tryToBreakDefMITie(MICall, NewDefs))) {
             // No suitable defining instruction, not much we can do...
-            LLVM_DEBUG(
-              dbgs() << "WARNING: multiple definitions for virtual "
-                        "register, missed in live-value analysis?\n";
-              for(auto d = MRI->def_instr_begin(ChainVreg),
-                  e = MRI->def_instr_end(); d != e; d++)
-                d->dump();
-            );
+            LLVM_DEBUG(dbgs()
+                           << "    WARNING: multiple definitions for virtual "
+                              "register, missed in live-value analysis?\n";
+                       for (auto d = MRI->def_instr_begin(ChainVreg),
+                            e = MRI->def_instr_end();
+                            d != e; d++) d->dump(););
             break;
           }
 
@@ -1342,6 +1347,8 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
       if(UsedSS.count(StackSlotIndex) && !MFI->isDeadObjectIndex(StackSlotIndex) &&
          isSSLiveAcrossInstr(StackSlotIndex, MICall) && CurSS.find(StackSlotIndex) == CurSS.end()) {
 
+        LLVM_DEBUG(dbgs() << "    + stack slot" << StackSlotIndex
+                          << " is live but not in stackmap\n";);
         StackCopyLoc *StackSlotCopyLocation;
         CopyLocVecPtr CopyLocationVector;
         CopyLocVec::const_iterator CopyLocation, CopyLocationEnd;
@@ -1409,7 +1416,10 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
               break;
             }
             default:
-              LLVM_DEBUG(dbgs() << "Unknown/invalid location type\n");
+              LLVM_DEBUG(dbgs() << "Unknown/invalid location type in "
+                                   "findArchSpecificLiveVals\n");
+              LLVM_DEBUG(dbgs() << "  CopyLocationPointer type = "
+                                << CopyLocationPointer->getType() << "\n");
               break;
             }
           }
