@@ -1292,7 +1292,8 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
                        for (auto d = MRI->def_instr_begin(ChainVreg),
                             e = MRI->def_instr_end();
                             d != e; d++) d->dump(););
-            break;
+            DefMI = *NewDefs.begin();
+            LLVM_DEBUG(dbgs() << "    Choosing first definition.\n";);
           }
 
           SeenDefs.insert(DefMI);
