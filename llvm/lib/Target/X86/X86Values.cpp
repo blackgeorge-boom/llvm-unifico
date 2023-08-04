@@ -169,6 +169,11 @@ MachineLiveValPtr X86Values::getMachineValue(const MachineInstr *MI) const {
   case X86::MOV32r0:
     Val = new MachineImmediate(4, 0, MI, false);
     break;
+  case X86::MOV8ri:
+    MO = &MI->getOperand(1);
+    if (MO->isImm())
+      Val = new MachineImmediate(1, MO->getImm(), MI, false);
+    break;
   case X86::MOV32ri:
     MO = &MI->getOperand(1);
     if(MO->isImm()) Val = new MachineImmediate(4, MO->getImm(), MI, false);
