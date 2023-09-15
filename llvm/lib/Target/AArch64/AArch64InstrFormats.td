@@ -2174,7 +2174,7 @@ multiclass AddSub<bit isSub, string mnemonic, string alias,
 
   // Add/Subtract register - Only used for CodeGen
 #ifdef UNIFICO_AARCH64_TWOADDR
-  let isCommutable = 1 in {
+  let isCommutable = !eq(isSub, 0) in {
 #endif
   def Wrr : BaseAddSubRegPseudo<GPR32, OpNode>;
   def Xrr : BaseAddSubRegPseudo<GPR64, OpNode>;
@@ -2255,7 +2255,7 @@ multiclass AddSubS<bit isSub, string mnemonic, SDNode OpNode, string cmp,
 
   // Add/Subtract register
 #ifdef UNIFICO_AARCH64_TWOADDR
-  let isCommutable = 1 in {
+  let isCommutable = !eq(isSub, 0) in {
 #endif
   def Wrr : BaseAddSubRegPseudo<GPR32, OpNode>;
   def Xrr : BaseAddSubRegPseudo<GPR64, OpNode>;
