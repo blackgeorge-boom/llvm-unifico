@@ -141,6 +141,7 @@ protected:
   bool AvoidF128 = false;
   bool AvoidUMADDL = false;
   bool HasCopyZRToTemp = false;
+  bool HasAdvancedRASplitCost = false;
 
   // Arm SVE2 extensions
   bool HasSVE2AES = false;
@@ -487,6 +488,10 @@ public:
   }
 
   void mirFileLoaded(MachineFunction &MF) const override;
+
+  bool enableAdvancedRASplitCost() const override {
+    return HasAdvancedRASplitCost;
+  }
 };
 } // End llvm namespace
 

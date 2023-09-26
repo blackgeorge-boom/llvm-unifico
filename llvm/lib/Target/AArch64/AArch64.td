@@ -376,6 +376,10 @@ def FeatureAvoidUMADDL : SubtargetFeature<"avoid-wide-mul-add", "AvoidUMADDL",
 def FeatureCopyZRToTemp : SubtargetFeature<"copy-zr-temp", "HasCopyZRToTemp",
     "true", "Copy the wzr/xzr registers only to temporary registers.">;
 
+// Enable advanced calculation of regalloc split costs.
+def FeatureAdvancedRASplitCost : SubtargetFeature<"advanced-ra-split-cost", "HasAdvancedRASplitCost",
+    "true", "Enable advanced calculation of regalloc split costs.">;
+
 //===----------------------------------------------------------------------===//
 // Architectures.
 //
