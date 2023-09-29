@@ -5625,14 +5625,18 @@ MachineInstr *AArch64InstrInfo::convertToThreeAddress(
   switch (MIOpc) {
   default:
     llvm_unreachable("Unreachable!");
-  case AArch64::ADDXrr:
-  case AArch64::ADDWrr:
   case AArch64::ADDSXrr:
   case AArch64::ADDSWrr:
-  case AArch64::SUBXrr:
-  case AArch64::SUBWrr:
   case AArch64::SUBSXrr:
   case AArch64::SUBSWrr:
+    // For the instructions that set the flags, do not turn them back into the
+    // three-address format, since the equivalent X86 instructions (usually
+    // CMP-like) have the two-address format.
+    return nullptr;
+  case AArch64::ADDXrr:
+  case AArch64::ADDWrr:
+  case AArch64::SUBXrr:
+  case AArch64::SUBWrr:
     assert(MI.getNumOperands() >= 3 && "Unknown add/sub instruction!");
     unsigned Opc = MIOpc;
 
