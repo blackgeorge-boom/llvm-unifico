@@ -234,6 +234,47 @@ void SlotIndexes::repairIndexesInRange(MachineBasicBlock *MBB,
   }
 }
 
+void SlotIndexes::packIndexes() {
+  unsigned Index = 0;
+  MachineBasicBlock *MBB;
+  // Check that the dummy entry for the start of the first block does not need
+  // updating. It should always be 0.
+  assert(idx2MBBMap[0].second->getNumber() == 0 &&
+         "First MBB should be number 0!");
+  assert(MBBRanges[0].first.getIndex() == Index && "First index should be 0!");
+  Index += SlotIndex::InstrDist;
+  // Iterate over basic blocks in slot index order.
+  for (auto &v : idx2MBBMap) {
+    // Update entries for each instruction in the block and the dummy entry for
+    // the end of the block.
+    MBB = v.second;
+    auto MBBStartIdx = MBBRanges[MBB->getNumber()].first;
+    auto MBBEndIdx = MBBRanges[MBB->getNumber()].second;
+    auto I = MBBStartIdx.listEntry()->getIterator();
+    auto E = MBBEndIdx.listEntry()->getIterator();
+    I++;
+    while (I != E) {
+      if (I->getInstr()) {
+        I->setIndex(Index);
+        Index += SlotIndex::InstrDist;
+        ++I;
+      } else {
+        // Remove entries for deleted instructions.
+        // FIXME: Eventually we want to remove them in
+        // removeMachineInstrFromMaps but that is not currently possible because
+        // some SlotIndexes API functions are called in a transiently broken
+        // state where some live ranges still refer to indexes of deleted
+        // instructions.
+        // TODO: Add removed entries to a free list so they can be reused?
+        indexList.remove(I++);
+      }
+    }
+    // Update the dummy entry for the end of the block.
+    MBBEndIdx.listEntry()->getIterator()->setIndex(Index);
+    Index += SlotIndex::InstrDist;
+  }
+}
+
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
 LLVM_DUMP_METHOD void SlotIndexes::dump() const {
   for (IndexList::const_iterator itr = indexList.begin();
