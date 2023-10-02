@@ -147,7 +147,7 @@ def AArch64LocalRecover : SDNode<"ISD::LOCAL_RECOVER",
                                   SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>,
                                                        SDTCisInt<1>]>>;
 
-def hasUMADDL           : Predicate<"!Subtarget->avoidUMADDL()">;
+def hasWideMul           : Predicate<"!Subtarget->avoidWideMul()">;
 
 //===----------------------------------------------------------------------===//
 // AArch64-specific DAG Nodes.
@@ -1116,13 +1116,12 @@ def SMSUBLrrr : WideMulAccum<1, 0b001, "smsubl", sub, sext>;
 def UMADDLrrr : WideMulAccum<0, 0b101, "umaddl", add, zext>;
 def UMSUBLrrr : WideMulAccum<1, 0b101, "umsubl", sub, zext>;
 
+let Predicates = [hasWideMul] in {
 def : Pat<(i64 (mul (sext GPR32:$Rn), (sext GPR32:$Rm))),
           (SMADDLrrr GPR32:$Rn, GPR32:$Rm, XZR)>;
 
-let Predicates = [hasUMADDL] in {
 def : Pat<(i64 (mul (zext GPR32:$Rn), (zext GPR32:$Rm))),
           (UMADDLrrr GPR32:$Rn, GPR32:$Rm, XZR)>;
-} // Predicates = [hasUMADDL]
 
 def : Pat<(i64 (ineg (mul (sext GPR32:$Rn), (sext GPR32:$Rm)))),
           (SMSUBLrrr GPR32:$Rn, GPR32:$Rm, XZR)>;
@@ -1162,6 +1161,7 @@ def : Pat<(i64 (sub GPR64:$Ra, (mul (sext_inreg GPR64:$Rn, i32),
                                     (s64imm_32bit:$C)))),
           (SMSUBLrrr (i32 (EXTRACT_SUBREG GPR64:$Rn, sub_32)),
                      (MOVi32imm (trunc_imm imm:$C)), GPR64:$Ra)>;
+} // Predicates = [hasWideMul]
 } // AddedComplexity = 5
 
 def : MulAccumWAlias<"mul", MADDWrrr>;

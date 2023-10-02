@@ -139,7 +139,7 @@ protected:
   bool DisableFPImmMaterialize = false;
   bool TempRegsADRP = false;
   bool AvoidF128 = false;
-  bool AvoidUMADDL = false;
+  bool AvoidWideMul = false;
   bool HasCopyZRToTemp = false;
   bool HasAdvancedRASplitCost = false;
 
@@ -396,7 +396,7 @@ public:
   bool disableFPImmMaterialize() const { return DisableFPImmMaterialize; }
   bool hasTempRegsADRP() const { return TempRegsADRP; }
   bool avoidF128() const { return AvoidF128; }
-  bool avoidUMADDL() const { return AvoidUMADDL; }
+  bool avoidWideMul() const { return AvoidWideMul; }
   bool hasCopyZRToTemp() const { return HasCopyZRToTemp; }
   // Arm SVE2 extensions
   bool hasSVE2AES() const { return HasSVE2AES; }

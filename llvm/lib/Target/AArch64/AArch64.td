@@ -368,8 +368,9 @@ def FeatureAvoidF128 : SubtargetFeature<"avoid-f128", "AvoidF128",
 // where the source operands are 32-bit and the destination is 64-bit.
 // X86 does not support this, using only 64-bit operands for a 64-bit destination.
 // This leads to differences in register allocation.
-def FeatureAvoidUMADDL : SubtargetFeature<"avoid-wide-mul-add", "AvoidUMADDL",
-    "true", "Disable the use of wide multiplication-addition of 32-bit to 64-bit.">;
+// The same goes for umaddl, usubl, smaddl, smsubl, and their aliases (e.g,. umull of umaddl).
+def FeatureAvoidWideMul : SubtargetFeature<"avoid-wide-mul", "AvoidWideMul",
+    "true", "Disable the use of wide multiplication of 32-bit operands to 64-bit.">;
 
 // Whether to enable the `requiresRegClassOfCopiedReg` check or not.
 // See TargetRegisterInfo.h for more details.
