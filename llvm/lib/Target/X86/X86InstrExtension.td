@@ -153,10 +153,19 @@ def MOVSX64rm16: RI<0xBF, MRMSrcMem, (outs GR64:$dst), (ins i16mem:$src),
                     "movs{wq|x}\t{$src, $dst|$dst, $src}",
                     [(set GR64:$dst, (sextloadi64i16 addr:$src))]>,
                     TB, Sched<[WriteALULd]>;
+
+#ifndef UNIFICO_INSTR_EXTENSION
 def MOVSX64rr32: RI<0x63, MRMSrcReg, (outs GR64:$dst), (ins GR32:$src),
                     "movs{lq|xd}\t{$src, $dst|$dst, $src}",
                     [(set GR64:$dst, (sext GR32:$src))]>,
                     Sched<[WriteALU]>, Requires<[In64BitMode]>;
+#else
+def MOVSX64rr32: RI<0x63, MRMSrcReg, (outs GR64:$dst), (ins GR64:$src),
+                    "movs{lq|xd}\t{$src, $dst|$dst, $src}",
+                    []>,
+                    Sched<[WriteALU]>, Requires<[In64BitMode]>;
+#endif
+
 def MOVSX64rm32: RI<0x63, MRMSrcMem, (outs GR64:$dst), (ins i32mem:$src),
                     "movs{lq|xd}\t{$src, $dst|$dst, $src}",
                     [(set GR64:$dst, (sextloadi64i32 addr:$src))]>,
