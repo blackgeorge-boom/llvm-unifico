@@ -1850,6 +1850,10 @@ class BaseMulAccum<bit isSub, bits<3> opc, RegisterClass multype,
   let Inst{14-10} = Ra;
   let Inst{9-5}   = Rn;
   let Inst{4-0}   = Rd;
+#ifdef UNIFICO_AARCH64_TWOADDR
+  let Constraints = "$Rd = $Rn";
+  let isCommutable = !eq(isSub, 0);
+#endif
 }
 
 multiclass MulAccum<bit isSub, string asm, SDNode AccNode> {
@@ -1896,12 +1900,22 @@ class MulHi<bits<3> opc, string asm, SDNode OpNode>
   let PostEncoderMethod = "fixMulHigh";
 }
 
+#ifndef UNIFICO_AARCH64_TWOADDR
 class MulAccumWAlias<string asm, Instruction inst>
     : InstAlias<asm#"\t$dst, $src1, $src2",
                 (inst GPR32:$dst, GPR32:$src1, GPR32:$src2, WZR)>;
 class MulAccumXAlias<string asm, Instruction inst>
     : InstAlias<asm#"\t$dst, $src1, $src2",
                 (inst GPR64:$dst, GPR64:$src1, GPR64:$src2, XZR)>;
+#else
+class MulAccumWAlias<string asm, Instruction inst>
+    : InstAlias<asm#"\t$src1, $src1, $src2",
+                (inst GPR32:$src1, GPR32:$src2, WZR)>;
+class MulAccumXAlias<string asm, Instruction inst>
+    : InstAlias<asm#"\t$src1, $src1, $src2",
+                (inst GPR64:$src1, GPR64:$src2, XZR)>;
+#endif
+
 class WideMulAccumAlias<string asm, Instruction inst>
     : InstAlias<asm#"\t$dst, $src1, $src2",
                 (inst GPR64:$dst, GPR32:$src1, GPR32:$src2, XZR)>;
