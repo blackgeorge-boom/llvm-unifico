@@ -1638,6 +1638,11 @@ def : Pat<(sext_inreg GR16:$src, i8),
            (EXTRACT_SUBREG (MOVSX32rr8 (EXTRACT_SUBREG GR16:$src, sub_8bit)),
              sub_16bit)>;
 
+#ifdef UNIFICO_INSTR_EXTENSION
+def : Pat<(i64 (sext GR32:$src)),
+          (MOVSX64rr32 (INSERT_SUBREG (i64 (IMPLICIT_DEF)), GR32:$src, sub_32bit))>;
+#endif
+
 def : Pat<(sext_inreg GR64:$src, i32),
           (MOVSX64rr32 (EXTRACT_SUBREG GR64:$src, sub_32bit))>;
 def : Pat<(sext_inreg GR64:$src, i16),
