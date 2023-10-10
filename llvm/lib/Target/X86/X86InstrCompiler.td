@@ -1644,7 +1644,11 @@ def : Pat<(i64 (sext GR32:$src)),
 #endif
 
 def : Pat<(sext_inreg GR64:$src, i32),
+#ifndef UNIFICO_INSTR_EXTENSION
           (MOVSX64rr32 (EXTRACT_SUBREG GR64:$src, sub_32bit))>;
+#else
+          (MOVSX64rr32 GR64:$src)>;
+#endif
 def : Pat<(sext_inreg GR64:$src, i16),
           (MOVSX64rr16 (EXTRACT_SUBREG GR64:$src, sub_16bit))>;
 def : Pat<(sext_inreg GR64:$src, i8),
