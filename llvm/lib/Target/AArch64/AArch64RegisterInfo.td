@@ -243,7 +243,7 @@ def GPR32temp : RegisterClass<"AArch64", [i32], 32,
                                 (add W8, W3, W2, W1, W0, W4, W5, W6, W7, W18, W16, W17, WZR)>;
 #endif
 
-#ifdef UNIFICO_REMAT_RULES
+#ifdef UNIFICO_REGALLOC_RULES
 def GPR64temp : RegisterClass<"AArch64", [i64], 64,
                                 (add X8, X3, X2, X1, X0, X4, X5, X6, X7, X18, X16, X17, XZR)>;
 #endif

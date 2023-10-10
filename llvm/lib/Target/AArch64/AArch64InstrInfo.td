@@ -454,7 +454,7 @@ def ADJCALLSTACKUP : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
                             Sched<[]>;
 } // Defs = [SP], Uses = [SP], hasSideEffects = 1, isCodeGenOnly = 1
 
-#ifndef UNIFICO_REMAT_RULES
+#ifndef UNIFICO_CHEAP_MOVES
 let isReMaterializable = 1, isCodeGenOnly = 1, isAsCheapAsAMove = 0 in {
 #else
 let isReMaterializable = 1, isCodeGenOnly = 1, isAsCheapAsAMove = 1 in {
@@ -1657,7 +1657,7 @@ def : InstAlias<"cneg $dst, $src, $cc",
 // PC-relative instructions.
 //===----------------------------------------------------------------------===//
 
-#ifndef UNIFICO_REMAT_RULES
+#ifndef UNIFICO_CHEAP_MOVES
 let isReMaterializable = 1, isAsCheapAsAMove = 0 in {
 #else
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
@@ -1666,7 +1666,7 @@ let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
 let hasSideEffects = 0, mayStore = 0, mayLoad = 0 in {
 
 def ADR  : ADRI<0, "adr", adrlabel,
-#ifndef UNIFICO_REMAT_RULES
+#ifndef UNIFICO_REGALLOC_RULES
                 [(set GPR64:$Xd, (AArch64adr tglobaladdr:$label))]>;
 #else
                 [(set GPR64temp:$Xd, (AArch64adr tglobaladdr:$label))]>;
@@ -1674,7 +1674,7 @@ def ADR  : ADRI<0, "adr", adrlabel,
 } // hasSideEffects = 0
 
 def ADRP : ADRI<1, "adrp", adrplabel,
-#ifndef UNIFICO_REMAT_RULES
+#ifndef UNIFICO_REGALLOC_RULES
                 [(set GPR64:$Xd, (AArch64adrp tglobaladdr:$label))]>;
 #else
                 [(set GPR64temp:$Xd, (AArch64adrp tglobaladdr:$label))]>;
