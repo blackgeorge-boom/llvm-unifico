@@ -1946,7 +1946,7 @@ class BaseCRC32<bit sf, bits<2> sz, bit C, RegisterClass StreamReg,
 //---
 
 class ADRI<bit page, string asm, Operand adr, list<dag> pattern>
-#ifndef UNIFICO_REMAT_RULES
+#ifndef UNIFICO_REGALLOC_RULES
     : I<(outs GPR64:$Xd), (ins adr:$label), asm, "\t$Xd, $label", "",
 #else
     : I<(outs GPR64temp:$Xd), (ins adr:$label), asm, "\t$Xd, $label", "",
@@ -2896,7 +2896,11 @@ class BaseLoadStoreUI<bits<2> sz, bit V, bits<2> opc, dag oops, dag iops,
 
 multiclass LoadUI<bits<2> sz, bit V, bits<2> opc, RegisterOperand regtype,
                   Operand indextype, string asm, list<dag> pattern> {
-  let AddedComplexity = 10, mayLoad = 1, mayStore = 0, hasSideEffects = 0 in
+#ifndef UNIFICO_REMAT_RULES
+  let AddedComplexity = 10, mayLoad = 1, mayStore = 0, hasSideEffects = 0, isReMaterializable = 0 in
+#else
+  let AddedComplexity = 10, mayLoad = 1, mayStore = 0, hasSideEffects = 0, isReMaterializable = 1 in
+#endif
   def ui : BaseLoadStoreUI<sz, V, opc, (outs regtype:$Rt),
                            (ins GPR64sp:$Rn, indextype:$offset),
                            asm, pattern>,
