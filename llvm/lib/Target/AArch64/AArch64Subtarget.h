@@ -142,6 +142,7 @@ protected:
   bool AvoidWideMul = false;
   bool HasCopyZRToTemp = false;
   bool HasAdvancedRASplitCost = false;
+  bool HasX86FabsFneg = false;
 
   // Arm SVE2 extensions
   bool HasSVE2AES = false;
@@ -398,6 +399,7 @@ public:
   bool avoidF128() const { return AvoidF128; }
   bool avoidWideMul() const { return AvoidWideMul; }
   bool hasCopyZRToTemp() const { return HasCopyZRToTemp; }
+  bool hasX86FabsFneg() const { return HasX86FabsFneg; }
   // Arm SVE2 extensions
   bool hasSVE2AES() const { return HasSVE2AES; }
   bool hasSVE2SM4() const { return HasSVE2SM4; }

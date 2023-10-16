@@ -445,6 +445,11 @@ AArch64TargetLowering::AArch64TargetLowering(const TargetMachine &TM,
     setOperationAction(ISD::FP_EXTEND,   MVT::v8f16, Expand);
   }
 
+  if (Subtarget->hasX86FabsFneg()) {
+    setOperationAction(ISD::FABS, MVT::f64, Custom);
+    setOperationAction(ISD::FNEG, MVT::f64, Custom);
+  }
+
   // AArch64 has implementations of a lot of rounding-like FP operations.
   for (MVT Ty : {MVT::f32, MVT::f64}) {
     setOperationAction(ISD::FFLOOR, Ty, Legal);
@@ -2865,6 +2870,37 @@ SDValue AArch64TargetLowering::LowerSTORE(SDValue Op,
   return SDValue();
 }
 
+static SDValue LowerFABSorFNEG(SDValue Op, SelectionDAG &DAG) {
+  assert((Op.getOpcode() == ISD::FABS || Op.getOpcode() == ISD::FNEG) &&
+         "Wrong opcode for lowering FABS or FNEG.");
+
+  bool IsFABS = (Op.getOpcode() == ISD::FABS);
+
+  // If this is a FABS and it has an FNEG user, bail out to fold the combination
+  // into an FNABS. We'll lower the FABS after that if it is still in use.
+  if (IsFABS)
+    for (SDNode *User : Op->uses())
+      if (User->getOpcode() == ISD::FNEG)
+        return Op;
+
+  SDLoc dl(Op);
+  MVT VT = Op.getSimpleValueType();
+
+  assert(VT == MVT::f64 && "Unexpected type in LowerFABSorFNEG");
+
+  SDValue Op0 = Op.getOperand(0);
+
+  // For the scalar case, extend to a 128-bit vector, perform the fabs/fneg
+  // operation in the vector node, and extract the scalar result back out,
+  // similarly to what X86 does.
+  SDValue VectorOperand =
+      DAG.getNode(ISD::SCALAR_TO_VECTOR, dl, MVT::v2f64, Op0);
+  SDValue VectorOpNode =
+      DAG.getNode(Op.getOpcode(), dl, MVT::v2f64, VectorOperand);
+  return DAG.getNode(ISD::EXTRACT_VECTOR_ELT, dl, VT, VectorOpNode,
+                     DAG.getIntPtrConstant(0, dl));
+}
+
 SDValue AArch64TargetLowering::LowerOperation(SDValue Op,
                                               SelectionDAG &DAG) const {
   LLVM_DEBUG(dbgs() << "Custom lowering: ");
@@ -2914,6 +2950,9 @@ SDValue AArch64TargetLowering::LowerOperation(SDValue Op,
   case ISD::SMULO:
   case ISD::UMULO:
     return LowerXALUO(Op, DAG);
+  case ISD::FABS:
+  case ISD::FNEG:
+    return LowerFABSorFNEG(Op, DAG);
   case ISD::FADD:
     return LowerF128Call(Op, DAG, RTLIB::ADD_F128);
   case ISD::FSUB:
