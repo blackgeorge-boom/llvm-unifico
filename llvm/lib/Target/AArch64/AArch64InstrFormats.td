@@ -4667,6 +4667,10 @@ class BaseTwoOperandFPData<bits<4> opcode, RegisterClass regtype,
   let Inst{11-10} = 0b10;
   let Inst{9-5}   = Rn;
   let Inst{4-0}   = Rd;
+  #ifdef UNIFICO_AARCH64_TWOADDR_FP
+  let Constraints = "$Rd = $Rn";
+  let isCommutable = !and(!ne(opcode, 0b0001), !ne(opcode, 0b0011));
+  #endif
 }
 
 multiclass TwoOperandFPData<bits<4> opcode, string asm,
@@ -4730,6 +4734,10 @@ class BaseThreeOperandFPData<bit isNegated, bit isSub,
   let Inst{14-10} = Ra;
   let Inst{9-5}   = Rn;
   let Inst{4-0}   = Rd;
+  #ifdef UNIFICO_AARCH64_TWOADDR_FP
+  let Constraints = "$Rd = $Rn";
+  let isCommutable = !eq(isSub, 0);
+  #endif
 }
 
 multiclass ThreeOperandFPData<bit isNegated, bit isSub,string asm,
