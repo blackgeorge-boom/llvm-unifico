@@ -2750,6 +2750,9 @@ class BaseCondSelect<bit op, bits<2> op2, RegisterClass regtype, string asm>
   let Inst{11-10} = op2;
   let Inst{9-5}   = Rn;
   let Inst{4-0}   = Rd;
+
+  let Constraints = "$Rd = $Rn";
+  let isCommutable = 1;
 }
 
 multiclass CondSelect<bit op, bits<2> op2, string asm> {
