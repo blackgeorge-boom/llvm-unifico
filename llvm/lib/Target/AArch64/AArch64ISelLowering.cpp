@@ -5064,18 +5064,25 @@ SDValue AArch64TargetLowering::LowerSELECT(SDValue Op,
   // Lower it the same way as we would lower a SELECT_CC node.
   ISD::CondCode CC;
   SDValue LHS, RHS;
+  // Whether to invert the condition and the operands to match how X86 lowers
+  // SELECT.
+  bool x86Select = Subtarget->hasX86Select();
   if (CCVal.getOpcode() == ISD::SETCC) {
     LHS = CCVal.getOperand(0);
     RHS = CCVal.getOperand(1);
     CC = cast<CondCodeSDNode>(CCVal->getOperand(2))->get();
-    CC = ISD::getSetCCInverse(CC,
-                              CCVal->getOperand(2).getValueType().isInteger());
+    if (x86Select)
+      CC = ISD::getSetCCInverse(
+          CC, CCVal->getOperand(2).getValueType().isInteger());
   } else {
     LHS = CCVal;
     RHS = DAG.getConstant(0, DL, CCVal.getValueType());
-    CC = ISD::SETEQ;
+    CC = x86Select ? ISD::SETEQ : ISD::SETNE;
   }
-  return LowerSELECT_CC(CC, LHS, RHS, FVal, TVal, DL, DAG);
+  if (x86Select)
+    return LowerSELECT_CC(CC, LHS, RHS, FVal, TVal, DL, DAG);
+  else
+    return LowerSELECT_CC(CC, LHS, RHS, TVal, FVal, DL, DAG);
 }
 
 SDValue AArch64TargetLowering::LowerJumpTable(SDValue Op,
