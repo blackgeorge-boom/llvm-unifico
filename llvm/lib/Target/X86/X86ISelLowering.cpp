@@ -20902,7 +20902,7 @@ SDValue X86TargetLowering::LowerSELECT(SDValue Op, SelectionDAG &DAG) const {
         // Blacklist CopyFromReg to avoid partial register stalls.
         T1.getOpcode() != ISD::CopyFromReg && T2.getOpcode()!=ISD::CopyFromReg){
       SDValue Cmov =
-          DAG.getNode(X86ISD::CMOV, DL, T1.getValueType(), T1, T2, CC, Cond);
+          DAG.getNode(X86ISD::CMOV, DL, T1.getValueType(), T2, T1, CC, Cond);
       return DAG.getNode(ISD::TRUNCATE, DL, Op.getValueType(), Cmov);
     }
   }
@@ -20918,14 +20918,14 @@ SDValue X86TargetLowering::LowerSELECT(SDValue Op, SelectionDAG &DAG) const {
        !MayFoldLoad(Op2))) {
     Op1 = DAG.getNode(ISD::ANY_EXTEND, DL, MVT::i32, Op1);
     Op2 = DAG.getNode(ISD::ANY_EXTEND, DL, MVT::i32, Op2);
-    SDValue Ops[] = {Op1, Op2, CC, Cond};
+    SDValue Ops[] = {Op2, Op1, CC, Cond};
     SDValue Cmov = DAG.getNode(X86ISD::CMOV, DL, MVT::i32, Ops);
     return DAG.getNode(ISD::TRUNCATE, DL, Op.getValueType(), Cmov);
   }
 
   // X86ISD::CMOV means set the result (which is operand 1) to the RHS if
   // condition is true.
-  SDValue Ops[] = {Op1, Op2, CC, Cond};
+  SDValue Ops[] = {Op2, Op1, CC, Cond};
   return DAG.getNode(X86ISD::CMOV, DL, Op.getValueType(), Ops);
 }
 

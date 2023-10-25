@@ -294,6 +294,21 @@ public:
                                       MachineInstr &MI,
                                       LiveVariables *LV) const override;
 
+  /// Commutes the operands in the given instruction by changing the operands
+  /// order and/or changing the instruction's opcode and/or the immediate value
+  /// operand.
+  ///
+  /// The arguments 'CommuteOpIdx1' and 'CommuteOpIdx2' specify the operands
+  /// to be commuted.
+  ///
+  /// Do not call this method for a non-commutable instruction or
+  /// non-commutable operands.
+  /// Even though the instruction is commutable, the method may still
+  /// fail to commute the operands, null pointer is returned in such cases.
+  MachineInstr *commuteInstructionImpl(MachineInstr &MI, bool NewMI,
+                                       unsigned CommuteOpIdx1,
+                                       unsigned CommuteOpIdx2) const override;
+
 #define GET_INSTRINFO_HELPER_DECLS
 #include "AArch64GenInstrInfo.inc"
 
@@ -387,6 +402,46 @@ static inline bool isCondBranchOpcode(int Opc) {
 
 static inline bool isIndirectBranchOpcode(int Opc) {
   return Opc == AArch64::BR;
+}
+
+static inline AArch64CC::CondCode
+getOppositeBranchCondition(AArch64CC::CondCode Opc) {
+  switch (Opc) {
+  default:
+    llvm_unreachable("Illegal condition code!");
+  case AArch64CC::EQ:
+    return AArch64CC::NE;
+  case AArch64CC::NE:
+    return AArch64CC::EQ;
+  case AArch64CC::HS:
+    return AArch64CC::LO;
+  case AArch64CC::LO:
+    return AArch64CC::HS;
+  case AArch64CC::MI:
+    return AArch64CC::PL;
+  case AArch64CC::PL:
+    return AArch64CC::MI;
+  case AArch64CC::VS:
+    return AArch64CC::VC;
+  case AArch64CC::VC:
+    return AArch64CC::VS;
+  case AArch64CC::HI:
+    return AArch64CC::LS;
+  case AArch64CC::LS:
+    return AArch64CC::HI;
+  case AArch64CC::GE:
+    return AArch64CC::LT;
+  case AArch64CC::LT:
+    return AArch64CC::GE;
+  case AArch64CC::GT:
+    return AArch64CC::LE;
+  case AArch64CC::LE:
+    return AArch64CC::GT;
+  case AArch64CC::AL:
+    return AArch64CC::NV;
+  case AArch64CC::NV:
+    return AArch64CC::AL;
+  }
 }
 
 // struct TSFlags {

@@ -40,6 +40,7 @@
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Target/TargetMachine.h"
@@ -50,6 +51,8 @@
 #include <utility>
 
 using namespace llvm;
+
+#define DEBUG_TYPE "aarch64-instr-info"
 
 #define GET_INSTRINFO_CTOR_DTOR
 #include "AArch64GenInstrInfo.inc"
@@ -5679,6 +5682,35 @@ MachineInstr *AArch64InstrInfo::convertToThreeAddress(
 
   MFI->insert(MI.getIterator(), NewMI); // Insert the new inst
   return NewMI;
+}
+
+MachineInstr *AArch64InstrInfo::commuteInstructionImpl(MachineInstr &MI,
+                                                       bool NewMI,
+                                                       unsigned OpIdx1,
+                                                       unsigned OpIdx2) const {
+  auto cloneIfNew = [NewMI](MachineInstr &MI) -> MachineInstr & {
+    if (NewMI)
+      return *MI.getParent()->getParent()->CloneMachineInstr(&MI);
+    return MI;
+  };
+
+  switch (MI.getOpcode()) {
+  case AArch64::CSELWr:
+  case AArch64::CSELXr: {
+    auto &WorkingMI = cloneIfNew(MI);
+    unsigned OpNo = MI.getDesc().getNumOperands() - 1;
+    AArch64CC::CondCode CC =
+        static_cast<AArch64CC::CondCode>(MI.getOperand(OpNo).getImm());
+    WorkingMI.getOperand(OpNo).setImm(getOppositeBranchCondition(CC));
+    return TargetInstrInfo::commuteInstructionImpl(WorkingMI, /*NewMI=*/false,
+                                                   OpIdx1, OpIdx2);
+  }
+  default: {
+    LLVM_DEBUG(dbgs() << "Warning: default commuting of instruction:\n";
+               MI.dump(););
+    return TargetInstrInfo::commuteInstructionImpl(MI, NewMI, OpIdx1, OpIdx2);
+  }
+  }
 }
 
 #define GET_INSTRINFO_HELPERS
