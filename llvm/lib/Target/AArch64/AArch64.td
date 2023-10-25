@@ -381,6 +381,11 @@ def FeatureCopyZRToTemp : SubtargetFeature<"copy-zr-temp", "HasCopyZRToTemp",
 def FeatureAdvancedRASplitCost : SubtargetFeature<"advanced-ra-split-cost", "HasAdvancedRASplitCost",
     "true", "Enable advanced calculation of regalloc split costs.">;
 
+// Whether to lower FABS/FNEG the same way as X86, which converts them first to a 16-byte
+// vector and then performs the operation.
+def FeatureX86FabsFneg : SubtargetFeature<"x86-fabs-fneg", "HasX86FabsFneg",
+    "true", "Lower FABS/FNEG similarly to X86.">;
+
 //===----------------------------------------------------------------------===//
 // Architectures.
 //
