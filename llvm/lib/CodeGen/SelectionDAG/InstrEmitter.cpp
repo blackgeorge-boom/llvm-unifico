@@ -157,11 +157,10 @@ EmitCopyFromReg(SDNode *Node, unsigned ResNo, bool IsClone, bool IsCloned,
   SrcRC = TRI->getMinimalPhysRegClass(SrcReg, VT);
 
   // Figure out the register class to create for the destreg.
-  if (VRBase) {
+  if (TRI->requiresRegClassOfCopiedReg(*MF, SrcReg)) {
+    DstRC = SrcRC;
+  } else if (VRBase) {
     DstRC = MRI->getRegClass(VRBase);
-    if (TRI->requiresRegClassOfCopiedReg(*MF, SrcReg)) {
-      DstRC = SrcRC;
-    }
   } else if (UseRC) {
     assert(TRI->isTypeLegalForClass(*UseRC, VT) &&
            "Incompatible phys register def and uses!");
