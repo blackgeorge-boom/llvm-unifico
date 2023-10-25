@@ -386,6 +386,11 @@ def FeatureAdvancedRASplitCost : SubtargetFeature<"advanced-ra-split-cost", "Has
 def FeatureX86FabsFneg : SubtargetFeature<"x86-fabs-fneg", "HasX86FabsFneg",
     "true", "Lower FABS/FNEG similarly to X86.">;
 
+// Whether to lower SELECT the same way as X86, which inverts the operands and the condition
+// to make it compatible with the two-address format.
+def FeatureX86Select : SubtargetFeature<"x86-select", "HasX86Select",
+    "true", "Lower SELECT similarly to X86.">;
+
 //===----------------------------------------------------------------------===//
 // Architectures.
 //
