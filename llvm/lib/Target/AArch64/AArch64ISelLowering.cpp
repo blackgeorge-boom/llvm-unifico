@@ -5029,12 +5029,14 @@ SDValue AArch64TargetLowering::LowerSELECT(SDValue Op,
     LHS = CCVal.getOperand(0);
     RHS = CCVal.getOperand(1);
     CC = cast<CondCodeSDNode>(CCVal->getOperand(2))->get();
+    CC = ISD::getSetCCInverse(CC,
+                              CCVal->getOperand(2).getValueType().isInteger());
   } else {
     LHS = CCVal;
     RHS = DAG.getConstant(0, DL, CCVal.getValueType());
-    CC = ISD::SETNE;
+    CC = ISD::SETEQ;
   }
-  return LowerSELECT_CC(CC, LHS, RHS, TVal, FVal, DL, DAG);
+  return LowerSELECT_CC(CC, LHS, RHS, FVal, TVal, DL, DAG);
 }
 
 SDValue AArch64TargetLowering::LowerJumpTable(SDValue Op,
