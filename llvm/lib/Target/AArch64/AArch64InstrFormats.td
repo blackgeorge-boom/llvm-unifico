@@ -2751,8 +2751,10 @@ class BaseCondSelect<bit op, bits<2> op2, RegisterClass regtype, string asm>
   let Inst{9-5}   = Rn;
   let Inst{4-0}   = Rd;
 
+#ifdef UNIFICO_AARCH64_TWOADDR
   let Constraints = "$Rd = $Rn";
   let isCommutable = 1;
+#endif
 }
 
 multiclass CondSelect<bit op, bits<2> op2, string asm> {
