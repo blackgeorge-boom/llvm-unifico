@@ -28711,6 +28711,10 @@ bool X86TargetLowering::allowTruncateForTailCall(Type *Ty1, Type *Ty2) const {
 }
 
 bool X86TargetLowering::isLegalICmpImmediate(int64_t Imm) const {
+  if (Subtarget.hasAArch64ConstantCostModel())
+    return isLegalAddImmediate(Imm);
+
+  // Fall back to x86 behavior.
   return isInt<32>(Imm);
 }
 
@@ -28718,7 +28722,13 @@ bool X86TargetLowering::isLegalAddImmediate(int64_t Imm) const {
 
   // When hoisting constants in `ConstantHoist`, we need to have aligned
   // behavior between X86 and AArch64 on this function.
+  // Also used in loop strength reduction.
   if (Subtarget.hasAArch64ConstantCostModel()) {
+    if (Imm == std::numeric_limits<int64_t>::min()) {
+      LLVM_DEBUG(dbgs() << "Illegal add imm " << Imm
+                        << ": avoid UB for INT64_MIN\n");
+      return false;
+    }
     // Same encoding for add/sub, just flip the sign.
     Imm = std::abs(Imm);
     bool IsLegal =
@@ -28728,6 +28738,7 @@ bool X86TargetLowering::isLegalAddImmediate(int64_t Imm) const {
     return IsLegal;
   }
 
+  // Fall back to x86 behavior.
   // Can also use sub to handle negated immediates.
   return isInt<32>(Imm);
 }
