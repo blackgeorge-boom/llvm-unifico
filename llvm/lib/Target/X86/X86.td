@@ -515,6 +515,12 @@ def FeatureAvoidSelectToFSETCC: SubtargetFeature<"avoid-select-to-fsetcc",
                                         "AvoidSelectToFSETCC", "true",
                                         "Avoid converting SELECT to FSETCC.">;
 
+// Allow similar addresses to AArch64 as legal.
+// For example, this is useful in loop strength reduction.
+def FeatureAArch64LegalAddress: SubtargetFeature<"aarch64-legal-addr",
+                                        "AArch64LegalAddress", "true",
+                                        "Similar legal addresses as in AArch64.">;
+
 // Bonnell
 def ProcIntelAtom : SubtargetFeature<"", "X86ProcFamily", "IntelAtom", "">;
 // Silvermont

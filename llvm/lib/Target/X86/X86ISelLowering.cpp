@@ -28584,6 +28584,11 @@ bool X86TargetLowering::isLegalAddressingMode(const DataLayout &DL,
     return false;
 
   if (AM.BaseGV) {
+
+    // AArch64 bails out here.
+    if (Subtarget.hasAArch64LegalAddress())
+      return false;
+
     unsigned GVFlags = Subtarget.classifyGlobalReference(AM.BaseGV);
 
     // If a reference to this global requires an extra load, we can't fold it.
