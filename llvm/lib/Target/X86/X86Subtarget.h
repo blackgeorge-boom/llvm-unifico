@@ -467,6 +467,9 @@ protected:
   /// Avoid converting SELECT to FSETCC
   bool AvoidSelectToFSETCC = false;
 
+  /// Encode similar addressing modes with AArch64
+  bool AArch64LegalAddress = false;
+
   /// What processor and OS we're targeting.
   Triple TargetTriple;
 
@@ -729,6 +732,7 @@ public:
   bool hasSimpleRegOffsetAddr() const { return SimpleRegOffsetAddr; }
   bool forceVectorMemOp() const { return ForceVectorMemOp; }
   bool avoidSelectToFSETCC() const { return AvoidSelectToFSETCC; }
+  bool hasAArch64LegalAddress() const { return AArch64LegalAddress; }
   bool avoidOptimizingMulCase1() const { return AvoidOptimizingMulCase1; }
   bool hasINVPCID() const { return HasINVPCID; }
   bool hasENQCMD() const { return HasENQCMD; }
