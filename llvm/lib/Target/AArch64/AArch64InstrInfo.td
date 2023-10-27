@@ -991,6 +991,7 @@ def : InstAlias<"ngcs $dst, $src", (SBCSXr GPR64:$dst, XZR, GPR64:$src)>;
 defm ADD : AddSub<0, "add", "sub", add>;
 defm SUB : AddSub<1, "sub", "add">;
 
+#ifndef UNIFICO_AARCH64_TWOADDR
 def : InstAlias<"mov $dst, $src",
                 (ADDWri GPR32sponly:$dst, GPR32sp:$src, 0, 0)>;
 def : InstAlias<"mov $dst, $src",
@@ -999,6 +1000,12 @@ def : InstAlias<"mov $dst, $src",
                 (ADDXri GPR64sponly:$dst, GPR64sp:$src, 0, 0)>;
 def : InstAlias<"mov $dst, $src",
                 (ADDXri GPR64sp:$dst, GPR64sponly:$src, 0, 0)>;
+#else
+def : InstAlias<"mov $dst, $dst",
+                (ADDWri GPR32sp:$dst, 0, 0)>;
+def : InstAlias<"mov $dst, $dst",
+                (ADDXri GPR64sp:$dst, 0, 0)>;
+#endif
 
 defm ADDS : AddSubS<0, "adds", AArch64add_flag, "cmn", "subs", "cmp">;
 defm SUBS : AddSubS<1, "subs", AArch64sub_flag, "cmp", "adds", "cmn">;

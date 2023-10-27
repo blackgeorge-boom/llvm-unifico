@@ -2067,6 +2067,10 @@ class AddSubImmShift<bit isSub, bit setFlags, RegisterClass dstRegtype,
   let Inst{23-22} = imm{13-12}; // '00' => lsl #0, '01' => lsl #12
   let Inst{21-10} = imm{11-0};
   let DecoderMethod = "DecodeAddSubImmShift";
+
+#ifdef UNIFICO_AARCH64_TWOADDR
+  let Constraints = "$Rd = $Rn";
+#endif
 }
 
 #ifdef UNIFICO_AARCH64_TWOADDR
@@ -2227,12 +2231,21 @@ multiclass AddSub<bit isSub, string mnemonic, string alias,
   }
 
   // add Rd, Rb, -imm -> sub Rd, Rn, imm
+#ifndef UNIFICO_AARCH64_TWOADDR
   def : InstSubst<alias#"\t$Rd, $Rn, $imm",
                   (!cast<Instruction>(NAME # "Wri") GPR32sp:$Rd, GPR32sp:$Rn,
                       addsub_shifted_imm32_neg:$imm), 0>;
   def : InstSubst<alias#"\t$Rd, $Rn, $imm",
                   (!cast<Instruction>(NAME # "Xri") GPR64sp:$Rd, GPR64sp:$Rn,
                        addsub_shifted_imm64_neg:$imm), 0>;
+#else
+  def : InstSubst<alias#"\t$Rd, $Rd, $imm",
+                  (!cast<Instruction>(NAME # "Wri") GPR32sp:$Rd,
+                      addsub_shifted_imm32_neg:$imm), 0>;
+  def : InstSubst<alias#"\t$Rd, $Rd, $imm",
+                  (!cast<Instruction>(NAME # "Xri") GPR64sp:$Rd,
+                       addsub_shifted_imm64_neg:$imm), 0>;
+#endif
 
   // Register/register aliases with no shift when SP is not used.
   def : AddSubRegAlias<mnemonic, !cast<Instruction>(NAME#"Wrs"),
