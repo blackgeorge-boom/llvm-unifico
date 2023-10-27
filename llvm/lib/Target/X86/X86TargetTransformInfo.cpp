@@ -51,6 +51,12 @@ using namespace llvm;
 
 #define DEBUG_TYPE "x86tti"
 
+static cl::opt<bool> AArch64FCmpCost(
+    "aarch64-fcmp-cost", cl::init(false),
+    cl::desc(
+        "Whether to follow AArch64 fcmp cost, e.g., when optimizing sqrt."),
+    cl::Hidden);
+
 //===----------------------------------------------------------------------===//
 //
 // X86 cost model.
@@ -3805,6 +3811,8 @@ bool X86TTIImpl::hasDivRemOp(Type *DataType, bool IsSigned) {
 }
 
 bool X86TTIImpl::isFCmpOrdCheaperThanFCmpZero(Type *Ty) {
+  if (AArch64FCmpCost)
+    return true;
   return false;
 }
 
