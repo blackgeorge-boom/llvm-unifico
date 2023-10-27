@@ -28606,6 +28606,44 @@ bool X86TargetLowering::isLegalAddressingMode(const DataLayout &DL,
       return false;
   }
 
+  // Follow the rest of AArch64's legal address checks.
+  if (Subtarget.hasAArch64LegalAddress()) {
+
+    // No reg+reg+imm addressing.
+    if (AM.HasBaseReg && AM.BaseOffs && AM.Scale)
+      return false;
+
+    // check reg + imm case:
+    // i.e., reg + 0, reg + imm9, reg + SIZE_IN_BYTES * uimm12
+    uint64_t NumBytes = 0;
+    if (Ty->isSized()) {
+      uint64_t NumBits = DL.getTypeSizeInBits(Ty);
+      NumBytes = NumBits / 8;
+      if (!isPowerOf2_64(NumBits))
+        NumBytes = 0;
+    }
+
+    if (!AM.Scale) {
+      int64_t Offset = AM.BaseOffs;
+
+      // 9-bit signed offset
+      if (isInt<9>(Offset))
+        return true;
+
+      // 12-bit unsigned offset
+      unsigned shift = Log2_64(NumBytes);
+      if (NumBytes && Offset > 0 && (Offset / NumBytes) <= (1LL << 12) - 1 &&
+          // Must be a multiple of NumBytes (NumBytes is a power of 2)
+          (Offset >> shift) << shift == Offset)
+        return true;
+      return false;
+    }
+
+    // Check reg1 + SIZE_IN_BYTES * reg2 and reg1 + reg2
+
+    return AM.Scale == 1 || (AM.Scale > 0 && (uint64_t)AM.Scale == NumBytes);
+  }
+
   switch (AM.Scale) {
   case 0:
   case 1:
