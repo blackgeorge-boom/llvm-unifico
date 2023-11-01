@@ -391,6 +391,12 @@ def FeatureX86FabsFneg : SubtargetFeature<"x86-fabs-fneg", "HasX86FabsFneg",
 def FeatureX86Select : SubtargetFeature<"x86-select", "HasX86Select",
     "true", "Lower SELECT similarly to X86.">;
 
+// Whether to allow using MOVi32imm even for 64-bit moves.
+// X86 doesn't support this and it rematerializes the same constant
+// when it's used for both 32- and 64-bit destinations.
+def Feature64MovImm32 : SubtargetFeature<"mov-64-imm32", "Has64MovImm32",
+    "true", "Allow using MOVi32imm even for 64-bit moves.">;
+
 //===----------------------------------------------------------------------===//
 // Architectures.
 //

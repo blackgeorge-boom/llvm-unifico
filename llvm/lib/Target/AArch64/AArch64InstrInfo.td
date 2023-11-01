@@ -149,6 +149,8 @@ def AArch64LocalRecover : SDNode<"ISD::LOCAL_RECOVER",
 
 def hasWideMul           : Predicate<"!Subtarget->avoidWideMul()">;
 
+def has64MovImm32 : Predicate<"Subtarget->has64MovImm32()">;
+
 //===----------------------------------------------------------------------===//
 // AArch64-specific DAG Nodes.
 //
@@ -922,8 +924,10 @@ def trunc_imm : SDNodeXForm<imm, [{
 def gi_trunc_imm : GICustomOperandRenderer<"renderTruncImm">,
   GISDNodeXFormEquiv<trunc_imm>;
 
+let Predicates = [has64MovImm32] in {
 def : Pat<(i64 i64imm_32bit:$src),
           (SUBREG_TO_REG (i64 0), (MOVi32imm (trunc_imm imm:$src)), sub_32)>;
+}
 
 // Materialize FP constants via MOVi32imm/MOVi64imm (MachO large code model).
 def bitcast_fpimm_to_i32 : SDNodeXForm<fpimm, [{

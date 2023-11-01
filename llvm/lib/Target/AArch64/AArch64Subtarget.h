@@ -144,6 +144,7 @@ protected:
   bool HasAdvancedRASplitCost = false;
   bool HasX86FabsFneg = false;
   bool HasX86Select = false;
+  bool Has64MovImm32 = false;
 
   // Arm SVE2 extensions
   bool HasSVE2AES = false;
@@ -402,6 +403,7 @@ public:
   bool hasCopyZRToTemp() const { return HasCopyZRToTemp; }
   bool hasX86FabsFneg() const { return HasX86FabsFneg; }
   bool hasX86Select() const { return HasX86Select; }
+  bool has64MovImm32() const { return Has64MovImm32; }
   // Arm SVE2 extensions
   bool hasSVE2AES() const { return HasSVE2AES; }
   bool hasSVE2SM4() const { return HasSVE2SM4; }
