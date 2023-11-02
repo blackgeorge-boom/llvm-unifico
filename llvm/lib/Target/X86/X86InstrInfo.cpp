@@ -615,6 +615,9 @@ void X86InstrInfo::reMaterialize(MachineBasicBlock &MBB,
     // effects.
     int Value;
     switch (Orig.getOpcode()) {
+    case X86::MOV8r0:
+      Value = 0;
+      break;
     case X86::MOV32r0:  Value = 0; break;
     case X86::MOV32r1:  Value = 1; break;
     case X86::MOV32r_1: Value = -1; break;
@@ -3999,6 +4002,8 @@ bool X86InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   bool HasAVX = Subtarget.hasAVX();
   MachineInstrBuilder MIB(*MI.getParent()->getParent(), MI);
   switch (MI.getOpcode()) {
+  case X86::MOV8r0:
+    return Expand2AddrUndef(MIB, get(X86::XOR32rr));
   case X86::MOV32r0:
     return Expand2AddrUndef(MIB, get(X86::XOR32rr));
   case X86::MOV32r1:
@@ -4788,7 +4793,7 @@ MachineInstr *X86InstrInfo::foldMemoryOperandImpl(
     isTwoAddrFold = true;
   } else {
     if (OpNum == 0) {
-      if (MI.getOpcode() == X86::MOV32r0) {
+      if (MI.getOpcode() == X86::MOV32r0 || MI.getOpcode() == X86::MOV8r0) {
         NewMI = MakeM0Inst(*this, X86::MOV32mi, MOs, InsertPt, MI);
         if (NewMI)
           return NewMI;
