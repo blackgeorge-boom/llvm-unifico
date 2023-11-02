@@ -397,6 +397,12 @@ def FeatureX86Select : SubtargetFeature<"x86-select", "HasX86Select",
 def Feature64MovImm32 : SubtargetFeature<"mov-64-imm32", "Has64MovImm32",
     "true", "Allow using MOVi32imm even for 64-bit moves.">;
 
+// Whether to allow tricks with the csinc-like instructions.
+// These tricks avoid materializing constants like 1 or -1, but X86 doesn't
+// support these, leading to different arch-specific values.
+def FeatureCSINCTricks : SubtargetFeature<"csinc-tricks", "HasCSINCTricks",
+    "true", "Allow tricks with the csinc-like instructions that avoid constants like 1 or -1.">;
+
 //===----------------------------------------------------------------------===//
 // Architectures.
 //
