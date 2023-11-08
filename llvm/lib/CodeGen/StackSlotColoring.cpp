@@ -41,6 +41,12 @@
 #include <iterator>
 #include <vector>
 
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/JSON.h"
+#include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/SourceMgr.h"
+#include <system_error>
+
 using namespace llvm;
 
 #define DEBUG_TYPE "stack-slot-coloring"
@@ -55,6 +61,12 @@ static cl::opt<bool>
                        cl::desc("Hard-code the alignment of all objects in the"
                                 "stack to by at least four bytes."),
                        cl::init(false), cl::Hidden);
+
+static cl::opt<bool>
+    AlignStackSlots("align-stack-slots",
+                    cl::desc("Hard-code the alignment of all objects in the"
+                             "stack to by at least four bytes."),
+                    cl::init(false), cl::Hidden);
 
 static cl::opt<int> DCELimit("ssc-dce-limit", cl::init(-1), cl::Hidden);
 
@@ -123,7 +135,7 @@ namespace {
     void InitializeSlots();
     void ScanForSpillSlotRefs(MachineFunction &MF);
     bool OverlapWithAssignments(LiveInterval *li, int Color) const;
-    int ColorSlot(LiveInterval *li);
+    int ColorSlot(LiveInterval *li, MachineFunction &MF);
     bool ColorSlots(MachineFunction &MF);
     void RewriteInstruction(MachineInstr &MI, SmallVectorImpl<int> &SlotMapping,
                             MachineFunction &MF);
@@ -271,7 +283,7 @@ StackSlotColoring::OverlapWithAssignments(LiveInterval *li, int Color) const {
 }
 
 /// ColorSlot - Assign a "color" (stack slot) to the specified stack slot.
-int StackSlotColoring::ColorSlot(LiveInterval *li) {
+int StackSlotColoring::ColorSlot(LiveInterval *li, MachineFunction &MF) {
   int Color = -1;
   bool Share = false;
   int FI = TargetRegisterInfo::stackSlot2Index(li->reg);
@@ -309,7 +321,7 @@ int StackSlotColoring::ColorSlot(LiveInterval *li) {
 
   // Record the assignment.
   Assignments[Color].push_back(li);
-  LLVM_DEBUG(dbgs() << "Assigning fi#" << FI << " to fi#" << Color << "\n");
+  LLVM_DEBUG(dbgs() << "Assigning fi#" << FI << " to fi#" << Color);
 
   // Change size and alignment of the allocated slot. If there are multiple
   // objects sharing the same slot, then make sure the size and alignment
@@ -317,11 +329,64 @@ int StackSlotColoring::ColorSlot(LiveInterval *li) {
   unsigned Align = OrigAlignments[FI];
   if (AlignObjectsToFour)
     Align = std::max(Align, 4u);
+
+  const StringRef FuncName = MF.getName();
+  // E.g., main_opt.ll
+  const StringRef ModuleName = MF.getFunction().getParent()->getName();
+  // the last "_opt.ll" part
+  const int ModuleNameSuffixSize = 7;
+  auto FirstPart =
+      ModuleName.substr(0, ModuleName.size() - ModuleNameSuffixSize);
+  const StringRef FileSuffix = "_stack_slots.txt";
+  const std::string FilenameStr =
+      std::string(FirstPart) + std::string(FileSuffix);
+  const StringRef Filename = StringRef(FilenameStr);
+
+  if (AlignStackSlots && !Filename.empty()) {
+
+    ErrorOr<std::unique_ptr<MemoryBuffer>> FileOrErr =
+        MemoryBuffer::getFileOrSTDIN(Filename);
+    if (auto EC = FileOrErr.getError()) {
+      auto Err = SMDiagnostic(Filename, SourceMgr::DK_Error,
+                              "Could not open input file " + Filename.str() +
+                                  ": " + EC.message());
+      errs() << Err.getMessage() << "\n";
+      exit(1);
+    }
+
+    Expected<llvm::json::Value> JSONOrErr =
+        llvm::json::parse((FileOrErr.get())->getBuffer());
+    if (auto EC = JSONOrErr.takeError()) {
+      errs() << "Could not parse JSON file: " << Filename.str() << "\n";
+      exit(1);
+    }
+
+    if (llvm::json::Object *O = JSONOrErr->getAsObject()) {
+      if (llvm::json::Object *Opts = O->getObject(FuncName)) {
+        Optional<int64_t> Padding = Opts->getInteger(std::to_string(FI));
+        if (Padding) {
+          assert(Opts->get(std::to_string(FI))->kind() ==
+                     llvm::json::Value::Number &&
+                 "Padding was not a number!");
+
+          if (Padding.hasValue()) {
+            assert(Padding.getValue() % 4 == 0 &&
+                   "Stack slot alignment should be a multiple of four!");
+            Align = Padding.getValue();
+          }
+        }
+      }
+    }
+  }
+
   if (!Share || Align > MFI->getObjectAlignment(Color))
     MFI->setObjectAlignment(Color, Align);
   int64_t Size = OrigSizes[FI];
-  if (!Share || Size > MFI->getObjectSize(Color))
+  if (!Share || Size > MFI->getObjectSize(Color)) {
+    Size = std::max(Size, (int64_t)Align);
     MFI->setObjectSize(Color, Size);
+  }
+  LLVM_DEBUG(dbgs() << " align " << Align << " size " << Size << "\n");
   return Color;
 }
 
@@ -340,7 +405,7 @@ bool StackSlotColoring::ColorSlots(MachineFunction &MF) {
   for (unsigned i = 0, e = SSIntervals.size(); i != e; ++i) {
     LiveInterval *li = SSIntervals[i];
     int SS = TargetRegisterInfo::stackSlot2Index(li->reg);
-    int NewSS = ColorSlot(li);
+    int NewSS = ColorSlot(li, MF);
     assert(NewSS >= 0 && "Stack coloring failed?");
     SlotMapping[SS] = NewSS;
     RevMap[NewSS].push_back(SS);
