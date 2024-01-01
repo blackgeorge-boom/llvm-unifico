@@ -1,0 +1,20 @@
+#!/bin/bash
+
+INSTALL_DIR=/usr/local/llvm-9-align/toolchain/
+
+cmake \
+  -G Ninja \
+  -DBUILD_SHARED_LIBS=On \
+  -DLLVM_ENABLE_ASSERTIONS=Off \
+  -DLLVM_TARGETS_TO_BUILD="X86;AArch64" \
+  -DLLVM_ENABLE_SPHINX=Off \
+  -DLLVM_ENABLE_THREADS=On \
+  -DLLVM_INSTALL_UTILS=On \
+  -DLIBCXX_ENABLE_EXCEPTIONS=On \
+  -DLIBCXX_ENABLE_RTTI=On \
+  -DLLVM_OPTIMIZED_TABLEGEN=On \
+  -DLLVM_USE_LINKER="gold" \
+  -DLLVM_ENABLE_PROJECTS="clang" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" \
+  "/code/llvm-unifico/llvm"
