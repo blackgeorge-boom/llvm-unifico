@@ -409,11 +409,9 @@ def GR32 : RegisterClass<"X86", [i32], 32,
                          (add EAX, ECX, EDX, ESI, EDI, EBX, EBP, ESP,
                               R8D, R9D, R10D, R11D, R14D, R15D, R12D, R13D)>;
 
-#ifdef UNIFICO_REGALLOC_RULES
 def GR32temp : RegisterClass<"X86", [i32], 32,
                          (add EAX, ECX, EDX, ESI, EDI,
                               R8D, R9D, R10D, R11D, R14D, R12D, R13D)>;
-#endif
 
 // GR64 - 64-bit GPRs. This oddly includes RIP, which isn't accurate, since
 // RIP isn't really a register and it can't be used anywhere except in an
