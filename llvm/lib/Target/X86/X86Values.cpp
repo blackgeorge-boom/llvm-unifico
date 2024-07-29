@@ -276,6 +276,17 @@ MachineLiveValPtr X86Values::getMachineValue(const MachineInstr *MI) const {
     if (MO->isImm())
       Val = new MachineImmediate(8, MO->getImm(), MI, false);
     break;
+  case X86::COPY: {
+    unsigned Reg;
+    ValueGenInstList IL;
+    MO = &MI->getOperand(1);
+    if (MO->isReg()) {
+      Reg = MI->getOperand(1 + X86::AddrBaseReg).getReg();
+      IL.emplace_back(new RegInstruction<InstType::Set>(Reg));
+      Val = new MachineGeneratedVal(IL, MI, true);
+    }
+    break;
+  }
   default:
     TII =  MI->getParent()->getParent()->getSubtarget().getInstrInfo();
     LLVM_DEBUG(dbgs() << "Unhandled opcode: "

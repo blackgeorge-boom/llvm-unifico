@@ -223,10 +223,19 @@ MachineLiveValPtr AArch64Values::getMachineValue(const MachineInstr *MI) const {
     else if(TargetValues::isSymbolValue(MO))
       Val = new MachineSymbolRef(*MO, false, MI);
     break;
-  case AArch64::COPY:
+  case AArch64::COPY: {
     MO = &MI->getOperand(1);
-    if(MO->isReg() && MO->getReg() == AArch64::LR) Val = new ReturnAddress(MI);
+    if (MO->isReg() && MO->getReg() == AArch64::LR)
+      Val = new ReturnAddress(MI);
+    unsigned Reg;
+    ValueGenInstList IL;
+    if (MO->isReg()) {
+      Reg = MI->getOperand(1).getReg();
+      IL.emplace_back(new RegInstruction<InstType::Set>(Reg));
+      Val = new MachineGeneratedVal(IL, MI, true);
+    }
     break;
+  }
   case AArch64::FMOVD0:
     Conv64.d = 0.0;
     Val = new MachineImmediate(8, Conv64.i, MI, false);

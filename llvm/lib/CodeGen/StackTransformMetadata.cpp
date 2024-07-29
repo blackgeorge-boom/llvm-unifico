@@ -97,6 +97,9 @@ class StackTransformMetadata : public MachineFunctionPass {
   typedef std::pair<const MachineInstr *, StackValsMap> SMStackSlotPair;
   typedef std::map<const MachineInstr *, StackValsMap> SMStackSlotMap;
 
+  /// Mapping between stackmaps and live-out register masks
+  typedef std::map<MachineInstr *, uint32_t *> LiveOutRegMaskMap;
+
   /// A value's spill location
   class CopyLoc {
   public:
@@ -197,6 +200,7 @@ class StackTransformMetadata : public MachineFunctionPass {
   SMStackSlotMap SMStackSlots;
   SmallSet<int, 32> UsedSS;
   StackSlotCopies SSCopies;
+  LiveOutRegMaskMap LiveOutRegMasks;
 
   /* Functions */
 
@@ -207,6 +211,7 @@ class StackTransformMetadata : public MachineFunctionPass {
     SMStackSlots.clear();
     UsedSS.clear();
     SSCopies.clear();
+    LiveOutRegMasks.clear();
   }
 
   /// Print information about a virtual register and it's associated IR value
@@ -281,7 +286,7 @@ class StackTransformMetadata : public MachineFunctionPass {
 
   /// Ensure virtual registers used to generate architecture-specific values
   /// are handled by the stackmap & convert to physical registers
-  void sanitizeVregs(MachineLiveValPtr &LV, const MachineInstr *SM) const;
+  void sanitizeVregs(MachineLiveValPtr &LV, MachineInstr *SM) const;
 
   /// Find architecture-specific live values added by the backend
   void findArchSpecificLiveVals();
@@ -1164,7 +1169,7 @@ bool StackTransformMetadata::findAlternateOpLocs() {
 /// Ensure virtual registers used to generate architecture-specific values are
 /// handled by the stackmap & convert to physical registers
 void StackTransformMetadata::sanitizeVregs(MachineLiveValPtr &LV,
-                                           const MachineInstr *SM) const {
+                                           MachineInstr *SM) const {
   if(!LV) return;
   if(LV->isGenerated()) {
     MachineGeneratedVal *MGV = (MachineGeneratedVal *)LV.get();
@@ -1174,22 +1179,45 @@ void StackTransformMetadata::sanitizeVregs(MachineLiveValPtr &LV,
         RegInstructionBase *RI = (RegInstructionBase *)Inst[i].get();
         if(!TRI->isVirtualRegister(RI->getReg())) {
           if(RI->getReg() == TRI->getFrameRegister(*MF)) continue;
-          // TODO walk through stackmap and see if physical register in
-          // instruction is contained in stackmap
-          LV.reset(nullptr);
+          unsigned Reg;
+          bool Found = false;
+          // Walk through stackmap and see if physical register in instruction
+          // is contained in stackmap. If not, add it as a live-out register.
+          for (const auto *MMI = std::next(SM->operands_begin(), 2);
+               MMI != SM->operands_end(); MMI++) {
+            if (MMI->isReg()) {
+              Reg = MMI->getReg();
+              if (Reg == RI->getReg()) {
+                LLVM_DEBUG(dbgs() << "    + Found physical register" << Reg
+                                  << " in stackmap\n");
+                Found = true;
+                break;
+              }
+            }
+          }
+          if (!Found) {
+            LLVM_DEBUG(dbgs() << "      Physical register "
+                              << printReg(RI->getReg(), TRI)
+                              << " used to generate value not handled in "
+                                 "stackmap, will insert as live-out\n");
+            Reg = RI->getReg();
+            uint32_t *Mask;
+            Mask = LiveOutRegMasks.find(SM)->second;
+            Mask[Reg / 32] |= 1U << (Reg % 32);
+            // Give the target a chance to adjust the mask.
+            TRI->adjustStackMapLiveOutMask(Mask);
+          }
           return;
         }
-        else if(!SMRegs.at(SM).count(RI->getReg())) {
+        if (!SMRegs.at(SM).count(RI->getReg())) {
           LLVM_DEBUG(dbgs() << "WARNING: vreg "
                        << TargetRegisterInfo::virtReg2Index(RI->getReg())
                        << " used to generate value not handled in stackmap\n");
           LV.reset(nullptr);
           return;
         }
-        else {
-          assert(VRM->hasPhys(RI->getReg()) && "Invalid virtual register");
-          RI->setReg(VRM->getPhys(RI->getReg()));
-        }
+        assert(VRM->hasPhys(RI->getReg()) && "Invalid virtual register");
+        RI->setReg(VRM->getPhys(RI->getReg()));
       }
     }
   }
@@ -1244,11 +1272,13 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
 
   for(auto S = SM.begin(), SE = SM.end(); S != SE; S++)
   {
-    const MachineInstr *MISM = getMISM(*S);
+    MachineInstr *MISM = getMISM(*S);
     const MachineInstr *MICall = getMICall(*S);
     const CallInst *IRSM = getIRSM(*S);
     RegValsMap &CurVregs = SMRegs[MISM];
     StackValsMap &CurSS = SMStackSlots[MISM];
+    // The mask is owned and cleaned up by the Machine Function.
+    LiveOutRegMasks.emplace(MISM, MF->allocateRegMask());
 
     LLVM_DEBUG(
       MISM->dump();
@@ -1477,6 +1507,15 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
           }
         }
       }
+    }
+
+    if (LiveOutRegMasks.find(MISM)->second) {
+      // Add the accumulated  live-out registers (if any) in the live-out mask
+      // to the stackmap.
+      const MachineOperand MO =
+          MachineOperand::CreateRegLiveOut(LiveOutRegMasks.find(MISM)->second);
+      LLVM_DEBUG(dbgs() << "      Adding live-out register mask\n";);
+      MISM->addOperand(MO);
     }
 
     LLVM_DEBUG(dbgs() << "\n";);
