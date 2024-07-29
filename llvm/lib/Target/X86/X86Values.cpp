@@ -9,11 +9,11 @@
 
 #include "X86Values.h"
 #include "X86InstrInfo.h"
-#include "llvm/MC/MCSymbol.h"
-#include "llvm/Support/Debug.h"
+#include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
-#include "llvm/CodeGen/MachineConstantPool.h"
+#include "llvm/MC/MCSymbol.h"
+#include "llvm/Support/Debug.h"
 
 #define DEBUG_TYPE "stacktransform"
 
@@ -253,6 +253,37 @@ MachineLiveValPtr X86Values::getMachineValue(const MachineInstr *MI) const {
           }
         }
       }
+    }
+    break;
+  }
+  case X86::MOV8mi:
+    MO = &MI->getOperand(X86::AddrNumOperands);
+    if (MO->isImm())
+      Val = new MachineImmediate(1, MO->getImm(), MI, false);
+    break;
+  case X86::MOV16mi:
+    MO = &MI->getOperand(X86::AddrNumOperands);
+    if (MO->isImm())
+      Val = new MachineImmediate(2, MO->getImm(), MI, false);
+    break;
+  case X86::MOV32mi:
+    MO = &MI->getOperand(X86::AddrNumOperands);
+    if (MO->isImm())
+      Val = new MachineImmediate(4, MO->getImm(), MI, false);
+    break;
+  case X86::MOV64mi32:
+    MO = &MI->getOperand(X86::AddrNumOperands);
+    if (MO->isImm())
+      Val = new MachineImmediate(8, MO->getImm(), MI, false);
+    break;
+  case X86::COPY: {
+    unsigned Reg;
+    ValueGenInstList IL;
+    MO = &MI->getOperand(1);
+    if (MO->isReg()) {
+      Reg = MI->getOperand(1 + X86::AddrBaseReg).getReg();
+      IL.emplace_back(new RegInstruction<InstType::Set>(Reg));
+      Val = new MachineGeneratedVal(IL, MI, true);
     }
     break;
   }

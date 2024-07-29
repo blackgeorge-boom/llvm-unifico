@@ -97,6 +97,9 @@ class StackTransformMetadata : public MachineFunctionPass {
   typedef std::pair<const MachineInstr *, StackValsMap> SMStackSlotPair;
   typedef std::map<const MachineInstr *, StackValsMap> SMStackSlotMap;
 
+  /// Mapping between stackmaps and live-out register masks
+  typedef std::map<MachineInstr *, uint32_t *> LiveOutRegMaskMap;
+
   /// A value's spill location
   class CopyLoc {
   public:
@@ -197,6 +200,7 @@ class StackTransformMetadata : public MachineFunctionPass {
   SMStackSlotMap SMStackSlots;
   SmallSet<int, 32> UsedSS;
   StackSlotCopies SSCopies;
+  LiveOutRegMaskMap LiveOutRegMasks;
 
   /* Functions */
 
@@ -207,6 +211,7 @@ class StackTransformMetadata : public MachineFunctionPass {
     SMStackSlots.clear();
     UsedSS.clear();
     SSCopies.clear();
+    LiveOutRegMasks.clear();
   }
 
   /// Print information about a virtual register and it's associated IR value
@@ -281,7 +286,7 @@ class StackTransformMetadata : public MachineFunctionPass {
 
   /// Ensure virtual registers used to generate architecture-specific values
   /// are handled by the stackmap & convert to physical registers
-  void sanitizeVregs(MachineLiveValPtr &LV, const MachineInstr *SM) const;
+  void sanitizeVregs(MachineLiveValPtr &LV, MachineInstr *SM) const;
 
   /// Find architecture-specific live values added by the backend
   void findArchSpecificLiveVals();
@@ -415,6 +420,13 @@ StackTransformMetadata::getCopyLocation(const MachineInstr *MI) const {
   if((SrcVreg = TII->isStoreToStackSlot(*MI, SS)) &&
      TargetRegisterInfo::isVirtualRegister(SrcVreg))
     return CopyLocPtr(new StackStoreLoc(SrcVreg, SS, MI));
+
+  uint64_t Immediate;
+  unsigned MemBytes;
+  // Is it a store to the stack with an immediate value?
+  if (TII->isFoldedStoreToStackSlot(*MI, SS)) {
+    return CopyLocPtr(new StackStoreLoc(VirtRegMap::NO_PHYS_REG, SS, MI));
+  }
 
   // A non-copylike instruction
   return CopyLocPtr(nullptr);
@@ -1157,7 +1169,7 @@ bool StackTransformMetadata::findAlternateOpLocs() {
 /// Ensure virtual registers used to generate architecture-specific values are
 /// handled by the stackmap & convert to physical registers
 void StackTransformMetadata::sanitizeVregs(MachineLiveValPtr &LV,
-                                           const MachineInstr *SM) const {
+                                           MachineInstr *SM) const {
   if(!LV) return;
   if(LV->isGenerated()) {
     MachineGeneratedVal *MGV = (MachineGeneratedVal *)LV.get();
@@ -1167,22 +1179,45 @@ void StackTransformMetadata::sanitizeVregs(MachineLiveValPtr &LV,
         RegInstructionBase *RI = (RegInstructionBase *)Inst[i].get();
         if(!TRI->isVirtualRegister(RI->getReg())) {
           if(RI->getReg() == TRI->getFrameRegister(*MF)) continue;
-          // TODO walk through stackmap and see if physical register in
-          // instruction is contained in stackmap
-          LV.reset(nullptr);
+          unsigned Reg;
+          bool Found = false;
+          // Walk through stackmap and see if physical register in instruction
+          // is contained in stackmap. If not, add it as a live-out register.
+          for (const auto *MMI = std::next(SM->operands_begin(), 2);
+               MMI != SM->operands_end(); MMI++) {
+            if (MMI->isReg()) {
+              Reg = MMI->getReg();
+              if (Reg == RI->getReg()) {
+                LLVM_DEBUG(dbgs() << "    + Found physical register" << Reg
+                                  << " in stackmap\n");
+                Found = true;
+                break;
+              }
+            }
+          }
+          if (!Found) {
+            LLVM_DEBUG(dbgs() << "      Physical register "
+                              << printReg(RI->getReg(), TRI)
+                              << " used to generate value not handled in "
+                                 "stackmap, will insert as live-out\n");
+            Reg = RI->getReg();
+            uint32_t *Mask;
+            Mask = LiveOutRegMasks.find(SM)->second;
+            Mask[Reg / 32] |= 1U << (Reg % 32);
+            // Give the target a chance to adjust the mask.
+            TRI->adjustStackMapLiveOutMask(Mask);
+          }
           return;
         }
-        else if(!SMRegs.at(SM).count(RI->getReg())) {
+        if (!SMRegs.at(SM).count(RI->getReg())) {
           LLVM_DEBUG(dbgs() << "WARNING: vreg "
                        << TargetRegisterInfo::virtReg2Index(RI->getReg())
                        << " used to generate value not handled in stackmap\n");
           LV.reset(nullptr);
           return;
         }
-        else {
-          assert(VRM->hasPhys(RI->getReg()) && "Invalid virtual register");
-          RI->setReg(VRM->getPhys(RI->getReg()));
-        }
+        assert(VRM->hasPhys(RI->getReg()) && "Invalid virtual register");
+        RI->setReg(VRM->getPhys(RI->getReg()));
       }
     }
   }
@@ -1237,11 +1272,13 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
 
   for(auto S = SM.begin(), SE = SM.end(); S != SE; S++)
   {
-    const MachineInstr *MISM = getMISM(*S);
+    MachineInstr *MISM = getMISM(*S);
     const MachineInstr *MICall = getMICall(*S);
     const CallInst *IRSM = getIRSM(*S);
     RegValsMap &CurVregs = SMRegs[MISM];
     StackValsMap &CurSS = SMStackSlots[MISM];
+    // The mask is owned and cleaned up by the Machine Function.
+    LiveOutRegMasks.emplace(MISM, MF->allocateRegMask());
 
     LLVM_DEBUG(
       MISM->dump();
@@ -1355,6 +1392,7 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
         CopyLocVec::const_iterator CopyLocation, CopyLocationEnd;
         StackSlotCopies::const_iterator StackSlotCopiesMap;
         SmallPtrSet<const MachineInstr*, 4> StackSlotStores;
+        SmallPtrSet<const MachineInstr *, 4> StackSlotLoads;
         const MachineInstr *DefStore;
 
         if ((StackSlotCopiesMap = SSCopies.find(StackSlotIndex)) != SSCopies.end()) {
@@ -1366,10 +1404,13 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
             const CopyLocPtr CopyLocationPointer = *CopyLocation;
             if(CopyLocationPointer->getType() == CopyLoc::STACK_STORE) {
               StackSlotStores.insert(CopyLocationPointer->Instr);
+            } else if (CopyLocationPointer->getType() == CopyLoc::STACK_LOAD) {
+              StackSlotLoads.insert(CopyLocationPointer->Instr);
             }
           }
           if (StackSlotStores.empty()) {
-            LLVM_DEBUG(dbgs() << "    WARNING: Could not find stack store for stack slot\n");
+            LLVM_DEBUG(dbgs() << "      WARNING: Could not find stack store "
+                                 "for stack slot\n");
             continue;
           }
           if (StackSlotStores.size() == 1) {
@@ -1377,45 +1418,74 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
           }
           else if(!(DefStore = tryToBreakDefMITie(MICall, StackSlotStores))) {
             // No suitable defining instruction, not much we can do...
-            LLVM_DEBUG(dbgs() << "    WARNING: multiple definitions for stack slot, missed in live-value analysis?\n";);
+            LLVM_DEBUG(dbgs()
+                           << "      WARNING: multiple definitions for stack "
+                              "slot, missed in live-value analysis?\n";);
             continue;
           }
+          LLVM_DEBUG(dbgs()
+                         << "      Found defining instruction for stack slot: ";
+                     DefStore->dump(););
 
-          const MachineInstr *DefinitionMI;
-          // This should always work since we did this also in getCopyLocation
+          // Currently, we support two ways to define a stack slot that has not
+          // been handled already by the stackmap:
+          //
+          // 1. A spill instruction that stores a virtual register to the stack
+          // slot.
+          // 2. A store instruction that places an immediate in the stack slot.
+          //
+          // In the first case, we need to find the definition of the virtual
+          // register being spilled, in order to calculate the machine live
+          // value. In the second case, we can directly calculate the machine
+          // live value from the immediate value, so the defining instruction of
+          // the value is the store itself. Therefore, first we see if the store
+          // instruction has a register as a source.
           const unsigned ChainVreg = TII->isStoreToStackSlot(*DefStore, StackSlotIndex);
-          SmallPtrSet<const MachineInstr *, 4> SeenDefs, NewDefs;
+          const MachineInstr *DefinitionMI;
 
-          do {
-            getUnseenDefinitions(MRI->def_instr_begin(ChainVreg),
-                                 SeenDefs, NewDefs);
-            if (NewDefs.size() == 0) {
-              LLVM_DEBUG(dbgs() << "WARNING: no unseen definition\n");
-              break;
-            }
-            if (NewDefs.size() == 1) {
-              DefinitionMI = *NewDefs.begin();
-            }
-            else {
-              LLVM_DEBUG(dbgs()
-                             << "WARNING: Unhandled multiple definitions "
-                                "case in arch-specific slot.\n";
-                         for (auto NewDef
-                              : NewDefs) { dbgs() << "  " << *NewDef; });
-              break;
-            }
-
-            SeenDefs.insert(DefinitionMI);
+          if (ChainVreg == 0) {
+            // If the source is not a register, we have a direct store of an
+            // immediate to the stack slot (e.g., X86 MOV32mi).
+            DefinitionMI = DefStore;
             MLV = TVG->getMachineValue(DefinitionMI);
-            sanitizeVregs(MLV, MISM);
+          } else {
+            // If the source is a register, we need to find its definition as we
+            // did in the case of unhandled virtual registers. However, we need
+            // to exclude loads from the stack slot, as they do not constitute a
+            // definition and will lead to cyclic dependencies.
+            SmallPtrSet<const MachineInstr *, 4> SeenDefs, NewDefs;
+            SeenDefs = StackSlotLoads;
+            do {
+              getUnseenDefinitions(MRI->def_instr_begin(ChainVreg), SeenDefs,
+                                   NewDefs);
+              if (NewDefs.size() == 0) {
+                LLVM_DEBUG(dbgs() << "WARNING: no unseen definition\n");
+                break;
+              }
+              if (NewDefs.size() == 1) {
+                DefinitionMI = *NewDefs.begin();
+              } else if (!(DefinitionMI =
+                               tryToBreakDefMITie(MICall, NewDefs))) {
+                LLVM_DEBUG(dbgs() << "WARNING: Unhandled multiple definitions "
+                                     "case in arch-specific slot.\n";
+                           for (auto NewDef
+                                : NewDefs) { dbgs() << "  " << *NewDef; });
+                break;
+              }
 
-            if (MLV)
-              break; // We got a value!
+              SeenDefs.insert(DefinitionMI);
+              MLV = TVG->getMachineValue(DefinitionMI);
+              sanitizeVregs(MLV, MISM);
 
-            LLVM_DEBUG(dbgs() << "WARNING: Could not find a value for unhandled stack slot.\n");
-            break;
+              if (MLV)
+                break; // We got a value!
 
-          } while (TargetRegisterInfo::isVirtualRegister(ChainVreg));
+              LLVM_DEBUG(dbgs() << "WARNING: Could not find a value for "
+                                   "unhandled stack slot.\n");
+              break;
+
+            } while (TargetRegisterInfo::isVirtualRegister(ChainVreg));
+          }
 
           if (MLV) {
             LLVM_DEBUG(dbgs() << "      Defining instruction: ";
@@ -1437,6 +1507,15 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
           }
         }
       }
+    }
+
+    if (LiveOutRegMasks.find(MISM)->second) {
+      // Add the accumulated  live-out registers (if any) in the live-out mask
+      // to the stackmap.
+      const MachineOperand MO =
+          MachineOperand::CreateRegLiveOut(LiveOutRegMasks.find(MISM)->second);
+      LLVM_DEBUG(dbgs() << "      Adding live-out register mask\n";);
+      MISM->addOperand(MO);
     }
 
     LLVM_DEBUG(dbgs() << "\n";);

@@ -397,6 +397,22 @@ static bool isFrameStoreOpcode(int Opcode, unsigned &MemBytes) {
   return false;
 }
 
+static bool isFrameFoldedStoreOpcode(int Opcode) {
+  switch (Opcode) {
+  default:
+    return false;
+  case X86::MOV8mi:
+    return true;
+  case X86::MOV16mi:
+    return true;
+  case X86::MOV32mi:
+    return true;
+  case X86::MOV64mi32:
+    return true;
+  }
+  return false;
+}
+
 unsigned X86InstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
                                            int &FrameIndex) const {
   unsigned Dummy;
@@ -445,6 +461,16 @@ unsigned X86InstrInfo::isStoreToStackSlot(const MachineInstr &MI,
         isFrameOperand(MI, 0, FrameIndex))
       return MI.getOperand(X86::AddrNumOperands).getReg();
   return 0;
+}
+
+bool X86InstrInfo::isFoldedStoreToStackSlot(const MachineInstr &MI,
+                                            int &FrameIndex) const {
+  if (isFrameFoldedStoreOpcode(MI.getOpcode()))
+    if (MI.getOperand(X86::AddrNumOperands).isImm() &&
+        isFrameOperand(MI, 0, FrameIndex)) {
+      return true;
+    }
+  return false;
 }
 
 unsigned X86InstrInfo::isStoreToStackSlotPostFE(const MachineInstr &MI,
