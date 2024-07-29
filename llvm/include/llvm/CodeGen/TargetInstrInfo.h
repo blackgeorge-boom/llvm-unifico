@@ -284,6 +284,15 @@ public:
     return 0;
   }
 
+  /// If the specified machine instruction is a folded store to a stack slot,
+  /// return true, along with the FrameIndex of the loaded stack slot, the
+  /// immediate value and its size in bytes. If not, return 0. Otherwise, return
+  /// false.
+  virtual bool isFoldedStoreToStackSlot(const MachineInstr &MI,
+                                        int &FrameIndex) const {
+    return false;
+  }
+
   /// If the specified machine instruction has a store to a stack slot,
   /// return true along with the FrameIndices of the loaded stack slot and the
   /// machine mem operands containing the reference.

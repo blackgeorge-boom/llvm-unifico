@@ -416,6 +416,13 @@ StackTransformMetadata::getCopyLocation(const MachineInstr *MI) const {
      TargetRegisterInfo::isVirtualRegister(SrcVreg))
     return CopyLocPtr(new StackStoreLoc(SrcVreg, SS, MI));
 
+  uint64_t Immediate;
+  unsigned MemBytes;
+  // Is it a store to the stack with an immediate value?
+  if (TII->isFoldedStoreToStackSlot(*MI, SS)) {
+    return CopyLocPtr(new StackStoreLoc(VirtRegMap::NO_PHYS_REG, SS, MI));
+  }
+
   // A non-copylike instruction
   return CopyLocPtr(nullptr);
 }
@@ -1355,6 +1362,7 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
         CopyLocVec::const_iterator CopyLocation, CopyLocationEnd;
         StackSlotCopies::const_iterator StackSlotCopiesMap;
         SmallPtrSet<const MachineInstr*, 4> StackSlotStores;
+        SmallPtrSet<const MachineInstr *, 4> StackSlotLoads;
         const MachineInstr *DefStore;
 
         if ((StackSlotCopiesMap = SSCopies.find(StackSlotIndex)) != SSCopies.end()) {
@@ -1366,10 +1374,13 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
             const CopyLocPtr CopyLocationPointer = *CopyLocation;
             if(CopyLocationPointer->getType() == CopyLoc::STACK_STORE) {
               StackSlotStores.insert(CopyLocationPointer->Instr);
+            } else if (CopyLocationPointer->getType() == CopyLoc::STACK_LOAD) {
+              StackSlotLoads.insert(CopyLocationPointer->Instr);
             }
           }
           if (StackSlotStores.empty()) {
-            LLVM_DEBUG(dbgs() << "    WARNING: Could not find stack store for stack slot\n");
+            LLVM_DEBUG(dbgs() << "      WARNING: Could not find stack store "
+                                 "for stack slot\n");
             continue;
           }
           if (StackSlotStores.size() == 1) {
@@ -1377,45 +1388,74 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
           }
           else if(!(DefStore = tryToBreakDefMITie(MICall, StackSlotStores))) {
             // No suitable defining instruction, not much we can do...
-            LLVM_DEBUG(dbgs() << "    WARNING: multiple definitions for stack slot, missed in live-value analysis?\n";);
+            LLVM_DEBUG(dbgs()
+                           << "      WARNING: multiple definitions for stack "
+                              "slot, missed in live-value analysis?\n";);
             continue;
           }
+          LLVM_DEBUG(dbgs()
+                         << "      Found defining instruction for stack slot: ";
+                     DefStore->dump(););
 
-          const MachineInstr *DefinitionMI;
-          // This should always work since we did this also in getCopyLocation
+          // Currently, we support two ways to define a stack slot that has not
+          // been handled already by the stackmap:
+          //
+          // 1. A spill instruction that stores a virtual register to the stack
+          // slot.
+          // 2. A store instruction that places an immediate in the stack slot.
+          //
+          // In the first case, we need to find the definition of the virtual
+          // register being spilled, in order to calculate the machine live
+          // value. In the second case, we can directly calculate the machine
+          // live value from the immediate value, so the defining instruction of
+          // the value is the store itself. Therefore, first we see if the store
+          // instruction has a register as a source.
           const unsigned ChainVreg = TII->isStoreToStackSlot(*DefStore, StackSlotIndex);
-          SmallPtrSet<const MachineInstr *, 4> SeenDefs, NewDefs;
+          const MachineInstr *DefinitionMI;
 
-          do {
-            getUnseenDefinitions(MRI->def_instr_begin(ChainVreg),
-                                 SeenDefs, NewDefs);
-            if (NewDefs.size() == 0) {
-              LLVM_DEBUG(dbgs() << "WARNING: no unseen definition\n");
-              break;
-            }
-            if (NewDefs.size() == 1) {
-              DefinitionMI = *NewDefs.begin();
-            }
-            else {
-              LLVM_DEBUG(dbgs()
-                             << "WARNING: Unhandled multiple definitions "
-                                "case in arch-specific slot.\n";
-                         for (auto NewDef
-                              : NewDefs) { dbgs() << "  " << *NewDef; });
-              break;
-            }
-
-            SeenDefs.insert(DefinitionMI);
+          if (ChainVreg == 0) {
+            // If the source is not a register, we have a direct store of an
+            // immediate to the stack slot (e.g., X86 MOV32mi).
+            DefinitionMI = DefStore;
             MLV = TVG->getMachineValue(DefinitionMI);
-            sanitizeVregs(MLV, MISM);
+          } else {
+            // If the source is a register, we need to find its definition as we
+            // did in the case of unhandled virtual registers. However, we need
+            // to exclude loads from the stack slot, as they do not constitute a
+            // definition and will lead to cyclic dependencies.
+            SmallPtrSet<const MachineInstr *, 4> SeenDefs, NewDefs;
+            SeenDefs = StackSlotLoads;
+            do {
+              getUnseenDefinitions(MRI->def_instr_begin(ChainVreg), SeenDefs,
+                                   NewDefs);
+              if (NewDefs.size() == 0) {
+                LLVM_DEBUG(dbgs() << "WARNING: no unseen definition\n");
+                break;
+              }
+              if (NewDefs.size() == 1) {
+                DefinitionMI = *NewDefs.begin();
+              } else if (!(DefinitionMI =
+                               tryToBreakDefMITie(MICall, NewDefs))) {
+                LLVM_DEBUG(dbgs() << "WARNING: Unhandled multiple definitions "
+                                     "case in arch-specific slot.\n";
+                           for (auto NewDef
+                                : NewDefs) { dbgs() << "  " << *NewDef; });
+                break;
+              }
 
-            if (MLV)
-              break; // We got a value!
+              SeenDefs.insert(DefinitionMI);
+              MLV = TVG->getMachineValue(DefinitionMI);
+              sanitizeVregs(MLV, MISM);
 
-            LLVM_DEBUG(dbgs() << "WARNING: Could not find a value for unhandled stack slot.\n");
-            break;
+              if (MLV)
+                break; // We got a value!
 
-          } while (TargetRegisterInfo::isVirtualRegister(ChainVreg));
+              LLVM_DEBUG(dbgs() << "WARNING: Could not find a value for "
+                                   "unhandled stack slot.\n");
+              break;
+
+            } while (TargetRegisterInfo::isVirtualRegister(ChainVreg));
+          }
 
           if (MLV) {
             LLVM_DEBUG(dbgs() << "      Defining instruction: ";

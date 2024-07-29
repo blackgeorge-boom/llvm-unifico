@@ -201,6 +201,12 @@ public:
   /// reliable for correctness.
   unsigned isStoreToStackSlotPostFE(const MachineInstr &MI,
                                     int &FrameIndex) const override;
+  /// isStackSlotCopy - Return true if the specified machine instruction is
+  /// doing some form of folded store to a stack slot. Currently, it only covers
+  /// the case where an immediate is stored to a stack slot, like MOV32mi from
+  /// X86.
+  bool isFoldedStoreToStackSlot(const MachineInstr &MI,
+                                int &FrameIndex) const override;
 
   bool isReallyTriviallyReMaterializable(const MachineInstr &MI,
                                          AliasAnalysis *AA) const override;
