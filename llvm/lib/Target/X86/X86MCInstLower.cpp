@@ -2635,8 +2635,20 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
                    "Padding was not a number!");
 
             if (Padding.hasValue()) {
-              EmitNops(*OutStreamer, Padding.getValue(), Subtarget->is64Bit(),
+              uint64_t PaddingValue = Padding.getValue();
+              // If more than five bytes of padding are needed, emit an
+              // unconditional branch to skip the padding and go directly to the
+              // call instruction. Also, emit five bytes of padding less since
+              // the branch itself is 5 bytes. If five bytes of padding or less
+              // are needed, emit directly the nops. So, for a four-byte
+              // padding, skip the branch.
+              if (PaddingValue > 5) {
+                EmitAndCountInstruction(MCInstBuilder(X86::JMP_4).addExpr(MCSymbolRefExpr::create(MILabel, OutContext)));
+                PaddingValue -= 5;
+              }
+              EmitNops(*OutStreamer, PaddingValue, Subtarget->is64Bit(),
                        getSubtargetInfo());
+              OutStreamer->EmitLabel(MILabel);
             }
           }
         }

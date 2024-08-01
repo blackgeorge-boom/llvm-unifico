@@ -1267,8 +1267,24 @@ void AArch64AsmPrinter::EmitInstruction(const MachineInstr *MI) {
                    "Padding was not a number!");
 
             if (Padding.hasValue()) {
-              assert(Padding.getValue() % 4 == 0 && "aarch64 callsite padding should be a multiple of four!");
-              for (int64_t I = 0; I < Padding.getValue() / 4; I++)
+              uint64_t PaddingValue = Padding.getValue();
+              assert(PaddingValue % 4 == 0 &&
+                     "aarch64 callsite padding should be a multiple of four!");
+              // If more than one nop is needed, emit an unconditional branch to
+              // skip the padding and go directly to the call instruction. Also,
+              // emit one less nop instruction since the branch itself is 4
+              // bytes. If exactly one nop is needed, there is no reason to
+              // prefer the branch from the nop (also the branch poses
+              // limitations in the dispatch phase). So, for a four-byte
+              // padding, skip the branch.
+              if (PaddingValue > 4) {
+                EmitToStreamer(
+                    *OutStreamer,
+                    MCInstBuilder(AArch64::B).addImm(Padding.getValue() / 4));
+                PaddingValue -= 4;
+              }
+              // Emit the nops.
+              for (uint64_t I = 0; I < PaddingValue / 4; I++)
                 EmitToStreamer(*OutStreamer,
                                MCInstBuilder(AArch64::HINT).addImm(0));
             }
