@@ -1261,8 +1261,25 @@ tryToBreakDefMITie(const MachineInstr *MICall,
     }
   }
 
-  if(BestDef)
-    LLVM_DEBUG(dbgs() << "      Choosing defining instruction"; BestDef->dump());
+  if (BestDef) {
+    LLVM_DEBUG(dbgs() << "      Choosing defining instruction:";
+               BestDef->dump());
+    return BestDef;
+  }
+
+  for (auto Def : Definitions) {
+    // Second heuristic -- choose the first instruction that is as cheap as a
+    // move or a copy. This means that it is likely an initilization
+    // instruction, such as a MOV32r0 in X86 or a COPY wzr in AArch64.
+    if (Def->isAsCheapAsAMove() || Def->isCopy()) {
+      BestDef = Def;
+      LLVM_DEBUG(dbgs() << "      Choosing defining instruction because it is "
+                           "as cheap as a move or a copy:";
+                 BestDef->dump());
+      break;
+    }
+  }
+
   return BestDef;
 }
 
@@ -1419,9 +1436,15 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
           else if(!(DefStore = tryToBreakDefMITie(MICall, StackSlotStores))) {
             // No suitable defining instruction, not much we can do...
             LLVM_DEBUG(dbgs()
-                           << "      WARNING: multiple definitions for stack "
-                              "slot, missed in live-value analysis?\n";);
-            continue;
+                           << "      WARNING: Unhandled multiple definitions "
+                              "case in arch-specific slot, missed in "
+                              "live-value analysis?\n";
+                       for (auto StackSlotStore
+                            : StackSlotStores) {
+                         dbgs() << "      " << *StackSlotStore;
+                       });
+            DefStore = *StackSlotStores.begin();
+            LLVM_DEBUG(dbgs() << "      Choosing first definition.\n";);
           }
           LLVM_DEBUG(dbgs()
                          << "      Found defining instruction for stack slot: ";
@@ -1466,11 +1489,14 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
                 DefinitionMI = *NewDefs.begin();
               } else if (!(DefinitionMI =
                                tryToBreakDefMITie(MICall, NewDefs))) {
-                LLVM_DEBUG(dbgs() << "WARNING: Unhandled multiple definitions "
-                                     "case in arch-specific slot.\n";
-                           for (auto NewDef
-                                : NewDefs) { dbgs() << "  " << *NewDef; });
-                break;
+                LLVM_DEBUG(
+                    dbgs() << "      WARNING: Unhandled multiple definitions "
+                              "case in arch-specific slot, missed in "
+                              "live-value analysis?\n";
+                    for (auto NewDef
+                         : NewDefs) { dbgs() << "      " << *NewDef; });
+                DefinitionMI = *NewDefs.begin();
+                LLVM_DEBUG(dbgs() << "      Choosing first definition.\n";);
               }
 
               SeenDefs.insert(DefinitionMI);
