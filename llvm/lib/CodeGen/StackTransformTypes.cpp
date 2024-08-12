@@ -191,13 +191,19 @@ std::string MachineStackObject::toString() const {
   std::string buf;
   if(Load) buf = "load from ";
   else buf = "reference to ";
-  return buf + "stack slot " + std::to_string(Index);
+  buf += "stack slot " + std::to_string(Index);
+  if (Offset) {
+    buf += " with offset " + std::to_string(Offset);
+  }
+  return buf;
 }
 
 int
 MachineStackObject::getOffsetFromReg(AsmPrinter &AP, unsigned &BR) const {
   const TargetFrameLowering *TFL = AP.MF->getSubtarget().getFrameLowering();
-  return TFL->getFrameIndexReference(*AP.MF, Index, BR);
+  // Calculate the offset of the stack slot and add it to the potential existing
+  // offset of the machine live value.
+  return TFL->getFrameIndexReference(*AP.MF, Index, BR) + this->Offset;
 }
 
 //===----------------------------------------------------------------------===//

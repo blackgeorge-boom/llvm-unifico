@@ -309,11 +309,9 @@ private:
 /// MachineStackObject - an object on the stack
 class MachineStackObject : public MachineLiveVal {
 public:
-  MachineStackObject(int Index,
-                     bool Load,
-                     const MachineInstr *DefMI,
-                     bool Ptr = false)
-    : MachineLiveVal(DefMI, Ptr), Index(Index), Load(Load) {}
+  MachineStackObject(int Index, bool Load, const MachineInstr *DefMI,
+                     bool Ptr = false, int Offset = 0)
+      : MachineLiveVal(DefMI, Ptr), Index(Index), Load(Load), Offset(Offset) {}
   MachineStackObject(const MachineStackObject &C)
     : MachineLiveVal(C), Index(C.Index), Load(C.Load) {}
   virtual MachineLiveVal *copy() const
@@ -346,6 +344,11 @@ private:
   /// Are we generating a reference to a stack object or loading a value from
   /// the stack slot?
   bool Load;
+
+  /// The offset from the stack slot index of a stack obect. This is useful for
+  /// machine live values that encode an offset from a stack slot which should
+  /// be added to the offset from the base register when emitting the stackmap.
+  int Offset;
 };
 
 /// ReturnAddress - the return address stored on the stack

@@ -89,6 +89,9 @@ MachineLiveVal *X86Values::genLEAInstructions(const MachineInstr *MI) const {
     Size = 8;
 
     if(MI->getOperand(1 + X86::AddrBaseReg).isFI()) {
+      int FI = MI->getOperand(1 + X86::AddrBaseReg).getIndex();
+      int64_t Offset;
+
       // Stack slot address
       if(!isImmOp(MI->getOperand(1 + X86::AddrScaleAmt), 1)) {
         LLVM_DEBUG(dbgs() << "Unhandled scale amount for frame index\n");
@@ -100,14 +103,13 @@ MachineLiveVal *X86Values::genLEAInstructions(const MachineInstr *MI) const {
         break;
       }
 
-      if(!isImmOp(MI->getOperand(1 + X86::AddrDisp), 0)) {
-        LLVM_DEBUG(dbgs() << "Unhandled index register for frame index\n");
+      if (!MI->getOperand(1 + X86::AddrDisp).isImm()) {
+        LLVM_DEBUG(dbgs() << "Unhandled displacement for frame offset\n");
         break;
       }
+      Offset = MI->getOperand(1 + X86::AddrDisp).getImm();
 
-      return new
-        MachineStackObject(MI->getOperand(1 + X86::AddrBaseReg).getIndex(),
-                           false, MI, true);
+      return new MachineStackObject(FI, false, MI, true, Offset);
     }
     else if(isRegOp(MI->getOperand(1 + X86::AddrBaseReg), X86::RIP)) {
       // PC-relative symbol address
