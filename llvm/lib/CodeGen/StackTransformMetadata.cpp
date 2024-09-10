@@ -286,7 +286,7 @@ class StackTransformMetadata : public MachineFunctionPass {
 
   /// Ensure virtual registers used to generate architecture-specific values
   /// are handled by the stackmap & convert to physical registers
-  void sanitizeVregs(MachineLiveValPtr &LV, MachineInstr *SM) const;
+  unsigned sanitizeVregs(MachineLiveValPtr &LV, MachineInstr *SM) const;
 
   /// Find architecture-specific live values added by the backend
   void findArchSpecificLiveVals();
@@ -1168,9 +1168,10 @@ bool StackTransformMetadata::findAlternateOpLocs() {
 
 /// Ensure virtual registers used to generate architecture-specific values are
 /// handled by the stackmap & convert to physical registers
-void StackTransformMetadata::sanitizeVregs(MachineLiveValPtr &LV,
-                                           MachineInstr *SM) const {
-  if(!LV) return;
+unsigned StackTransformMetadata::sanitizeVregs(MachineLiveValPtr &LV,
+                                               MachineInstr *SM) const {
+  if (!LV)
+    return 0;
   if(LV->isGenerated()) {
     MachineGeneratedVal *MGV = (MachineGeneratedVal *)LV.get();
     const ValueGenInstList &Inst = MGV->getInstructions();
@@ -1207,20 +1208,22 @@ void StackTransformMetadata::sanitizeVregs(MachineLiveValPtr &LV,
             // Give the target a chance to adjust the mask.
             TRI->adjustStackMapLiveOutMask(Mask);
           }
-          return;
+          return 0;
         }
         if (!SMRegs.at(SM).count(RI->getReg())) {
           LLVM_DEBUG(dbgs() << "WARNING: vreg "
                        << TargetRegisterInfo::virtReg2Index(RI->getReg())
                        << " used to generate value not handled in stackmap\n");
+          unsigned UnhandledVreg = RI->getReg();
           LV.reset(nullptr);
-          return;
+          return UnhandledVreg;
         }
         assert(VRM->hasPhys(RI->getReg()) && "Invalid virtual register");
         RI->setReg(VRM->getPhys(RI->getReg()));
       }
     }
   }
+  return 0;
 }
 
 /// Filter out register definitions we've previously seen.
@@ -1328,6 +1331,7 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
         const MachineInstr *DefMI;
         unsigned ChainVreg = Vreg;
         SmallPtrSet<const MachineInstr *, 4> SeenDefs, NewDefs;
+        std::queue<WorkItem> work;
         do {
           getUnseenDefinitions(MRI->def_instr_begin(ChainVreg),
                                SeenDefs, NewDefs);
@@ -1352,12 +1356,24 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
 
           SeenDefs.insert(DefMI);
           MLV = TVG->getMachineValue(DefMI);
-          sanitizeVregs(MLV, MISM);
+          auto UnhandledVreg = sanitizeVregs(MLV, MISM);
 
-          if(MLV) break; // We got a value!
-          else {
+          if (MLV && work.empty())
+            break; // We got a value!
+          if (MLV) {
+            LLVM_DEBUG(dbgs() << "      Defining instruction: ";
+                       MLV->getDefiningInst()->print(dbgs());
+                       dbgs() << "      Value: " << MLV->toString() << "\n");
+
+            MLR.setReg(VRM->getPhys(ChainVreg));
+            MF->addSMArchSpecificLocation(IRSM, MLR, *MLV);
+            CurVregs.emplace(ChainVreg, ValueVecPtr(nullptr));
+            ChainVreg = work.front().Vreg;
+            work.pop();
+          } else {
             // Couldn't get a value, follow the use-def chain
             CopyLocPtr Copy = getCopyLocation(DefMI);
+            // If we have a copy, check the source for a value instead
             if(Copy) {
               switch(Copy->getType()) {
               default: ChainVreg = 0; break;
@@ -1365,8 +1381,16 @@ void StackTransformMetadata::findArchSpecificLiveVals() {
                 ChainVreg = ((RegCopyLoc *)Copy.get())->SrcVreg;
                 break;
               }
-            }
-            else ChainVreg = 0;
+              // As a last resort, check if sanitizeVregs found an unhandled
+              // vreg. If yes, then reset the search you did for the current
+              // vreg, try to find the value for the unhandled vreg, and later
+              // pop the original vreg from the queue and try again.
+            } else if (UnhandledVreg) {
+              work.emplace(ChainVreg, true);
+              ChainVreg = UnhandledVreg;
+              SeenDefs.erase(DefMI);
+            } else
+              ChainVreg = 0;
           }
         } while(TargetRegisterInfo::isVirtualRegister(ChainVreg));
 
