@@ -313,7 +313,7 @@ public:
                      bool Ptr = false, int Offset = 0)
       : MachineLiveVal(DefMI, Ptr), Index(Index), Load(Load), Offset(Offset) {}
   MachineStackObject(const MachineStackObject &C)
-    : MachineLiveVal(C), Index(C.Index), Load(C.Load) {}
+      : MachineLiveVal(C), Index(C.Index), Load(C.Load), Offset(C.Offset) {}
   virtual MachineLiveVal *copy() const
   { return new MachineStackObject(*this); }
 
