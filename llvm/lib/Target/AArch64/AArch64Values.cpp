@@ -70,14 +70,16 @@ AArch64Values::genADDInstructions(const MachineInstr *MI) const {
   ValueGenInstList IL;
 
   switch(MI->getOpcode()) {
-  case AArch64::ADDXri:
+  case AArch64::ADDXri: {
+    int64_t Offset;
     if(MI->getOperand(1).isFI()) {
       Index = MI->getOperand(1).getIndex();
-      assert(MI->getOperand(2).isImm() && MI->getOperand(2).getImm() == 0);
+      Offset = MI->getOperand(2).getImm();
       assert(MI->getOperand(3).isImm() && MI->getOperand(3).getImm() == 0);
-      return new MachineStackObject(Index, false, MI, true);
+      return new MachineStackObject(Index, false, MI, true, Offset);
     }
     break;
+  }
   case AArch64::ADDXrr:
     assert(MI->getOperand(1).isReg() && MI->getOperand(2).isReg());
     Reg1 = MI->getOperand(1).getReg();
@@ -138,6 +140,21 @@ AArch64Values::genBitfieldInstructions(const MachineInstr *MI) const {
     }
     return new MachineGeneratedVal(IL, MI, false);
     break;
+  case AArch64::ORRXri: {
+    Size = 8;
+    int64_t Offset;
+    assert(MI->getOperand(1).isReg() && MI->getOperand(2).isImm());
+    Offset = MI->getOperand(2).getImm();
+    if (MI->getOperand(1).isFI()) {
+      int Index = MI->getOperand(1).getIndex();
+      return new MachineStackObject(Index, false, MI, true, Offset);
+    }
+    IL.emplace_back(
+        new RegInstruction<InstType::Set>(MI->getOperand(1).getReg()));
+    IL.emplace_back(new ImmInstruction<InstType::Mask>(Size, Offset));
+    return new MachineGeneratedVal(IL, MI, false);
+    break;
+  }
   default:
     LLVM_DEBUG(dbgs() << "Unhandled bitfield instruction");
     break;
@@ -259,8 +276,10 @@ MachineLiveValPtr AArch64Values::getMachineValue(const MachineInstr *MI) const {
     Val = new MachineImmediate(8, MO->getImm(), MI, false);
     break;
   case AArch64::UBFMXri:
+  case AArch64::ORRXri:
     Val = genBitfieldInstructions(MI);
     break;
+
   default:
     TII =  MI->getParent()->getParent()->getSubtarget().getInstrInfo();
     LLVM_DEBUG(dbgs() << "Unhandled opcode: "
