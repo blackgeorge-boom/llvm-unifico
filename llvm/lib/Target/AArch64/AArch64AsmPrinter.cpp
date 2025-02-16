@@ -1279,6 +1279,14 @@ void AArch64AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   }
 
   EmitToStreamer(*OutStreamer, TmpInst);
+
+  if (MI->isCall()) {
+    /// Emit a label for the instruction after the call, to calculate the
+    /// correct offset for the stackmap later.
+    MCSymbol *MIAfterCallLabel = OutContext.createTempSymbol();
+    CurrentAfterCallSymForCSOffset = MIAfterCallLabel;
+    OutStreamer->EmitLabel(MIAfterCallLabel);
+  }
 }
 
 // Force static initialization.

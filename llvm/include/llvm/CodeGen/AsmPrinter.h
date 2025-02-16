@@ -118,6 +118,17 @@ public:
   /// default, this is equal to CurrentFnSym.
   MCSymbol *CurrentFnSymForSize = nullptr;
 
+  /// The symbol used to represent the next instruction after a call for the
+  /// purpose of calculating the correct stackmap offset from the beginning of
+  /// the parent function, which is exactly after the corresponding function
+  /// call. This is supposed to point where execution will happen in the
+  /// destination node after migration. Sometimes the compiler inserts MIR
+  /// instructions between a function call and the corresponding stackmap,
+  /// pushing the stackmap downwards. In this case, to have the correct stackmap
+  /// offset we keep track of the next instruction after the call through a
+  /// temporary symbol.
+  MCSymbol *CurrentAfterCallSymForCSOffset = nullptr;
+
   /// Map global GOT equivalent MCSymbols to GlobalVariables and keep track of
   /// its number of uses by other globals.
   using GOTEquivUsePair = std::pair<const GlobalVariable *, unsigned>;

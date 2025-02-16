@@ -2643,7 +2643,13 @@ void X86AsmPrinter::EmitInstruction(const MachineInstr *MI) {
       }
     }
 
+    /// Emit a label for the instruction after the call, to calculate the
+    /// correct offset for the stackmap later.
     OutStreamer->EmitInstruction(TmpInst, getSubtargetInfo());
+    MCSymbol *MIAfterCallLabel = OutContext.createTempSymbol();
+    CurrentAfterCallSymForCSOffset = MIAfterCallLabel;
+    OutStreamer->EmitLabel(MIAfterCallLabel);
+
     return;
   }
 
