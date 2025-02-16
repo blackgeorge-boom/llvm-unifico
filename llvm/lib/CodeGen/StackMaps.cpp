@@ -830,11 +830,16 @@ void StackMaps::recordPcnStackMapOpers(const MachineInstr &MI, uint64_t ID,
   // writers, in their infinite wisdom, decided to abstract multiple assembly
   // instructions into a single machine IR instruction (*ahem* PowerPC *ahem*).
   // Generate an expression to correct for this "feature".
+  //
+  // However, in Unifico, we aren't interested in powerpc, so we don't correct
+  // the offset. We only account for the case where the compiler has inserted
+  // MIR instructions between a call and the stackmap, so we calculate the
+  // offset from the parent function starting not from the stackmap itself
+  // (since it might have been pushed downwards), but from the instruction
+  // directly after the call (tracked by `CurrentAfterCallSymForCSOffset`).
   int RAOffset = AP.getCanonicalReturnAddr(MI.getPrevNode());
-  const MCExpr *RAFixup = MCBinaryExpr::createSub(
-      MCSymbolRefExpr::create(MILabel, OutContext),
-      MCConstantExpr::create(RAOffset, OutContext), OutContext);
-  const MCExpr *CSOffsetExpr = MCBinaryExpr::createSub(RAFixup,
+  const MCExpr *CSOffsetExpr = MCBinaryExpr::createSub(
+      MCSymbolRefExpr::create(AP.CurrentAfterCallSymForCSOffset, OutContext),
       MCSymbolRefExpr::create(AP.CurrentFnSymForSize, OutContext), OutContext);
 
   CSInfos.emplace_back(AP.CurrentFnSym, CSOffsetExpr, ID,
