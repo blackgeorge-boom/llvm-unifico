@@ -476,11 +476,11 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
 
   UnwindAddrRangeSection =
       Ctx->getELFSection(".stack_transform.unwind_arange", ELF::SHT_PROGBITS,
-                         ELF::SHF_MERGE, sizeof(uint64_t) + sizeof(uint64_t),
+                         0, sizeof(uint64_t) + sizeof(uint64_t),
 			 "");
   UnwindInfoSection =
       Ctx->getELFSection(".stack_transform.unwind", ELF::SHT_PROGBITS,
-			 ELF::SHF_MERGE, sizeof(uint16_t) + sizeof(int16_t), "");
+			 0, sizeof(uint16_t) + sizeof(int16_t), "");
   UnwindAddrRangeSection->setAlignment(sizeof(uint64_t));
   UnwindInfoSection->setAlignment(sizeof(uint16_t) + sizeof(int16_t));
 
