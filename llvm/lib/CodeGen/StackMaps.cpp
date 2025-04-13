@@ -772,17 +772,57 @@ void StackMaps::recordPcnStackMapOpers(const MachineInstr &MI, uint64_t ID,
   const BasicBlock *BB = MI.getParent()->getBasicBlock();
   const IntrinsicInst *IRSM = nullptr;
   const std::string SMName("llvm.experimental.pcn.stackmap");
-  for(auto BBI = BB->begin(), BBE = BB->end(); BBI != BBE; BBI++)
-  {
-    const IntrinsicInst *II;
-    if((II = dyn_cast<IntrinsicInst>(&*BBI)) &&
-       II->getCalledFunction()->getName() == SMName &&
-       cast<ConstantInt>(II->getArgOperand(0))->getZExtValue() == ID)
-    {
-      IRSM = cast<IntrinsicInst>(&*BBI);
-      break;
+
+  // There is a corresponding IR basic block
+  if (BB) {
+    for (auto BBI = BB->begin(), BBE = BB->end(); BBI != BBE; BBI++) {
+      const IntrinsicInst *II;
+      if ((II = dyn_cast<IntrinsicInst>(&*BBI)) &&
+          II->getCalledFunction()->getName() == SMName &&
+          cast<ConstantInt>(II->getArgOperand(0))->getZExtValue() == ID) {
+        IRSM = cast<IntrinsicInst>(&*BBI);
+        break;
+      }
+    }
+    // If we don't find the stackmap, search the successor's
+    // basic block, in case the function call and the stackmaps where hoisted
+    // from there.
+    if (!IRSM) {
+      const BasicBlock *SuccBB =
+          MI.getParent()->getBasicBlock()->getSingleSuccessor();
+      for (auto I = SuccBB->begin(), E = SuccBB->end(); I != E; ++I) {
+        const IntrinsicInst *II;
+        if ((II = dyn_cast<IntrinsicInst>(&*I)) &&
+            II->getCalledFunction()->getName() == SMName &&
+            cast<ConstantInt>(II->getArgOperand(0))->getZExtValue() == ID) {
+          IRSM = cast<IntrinsicInst>(&*I);
+          break;
+        }
+      }
+    }
+  } else {
+    // If there is no associated basic block, iterate over all IR basic blocks
+    // of the function This can happen if, e.g., there was an optimization that
+    // split the original IR basic block and the stackmap ended up in the "fake"
+    // block.
+    bool FoundIRSM = false;
+    for (const auto &BBI : AP.MF->getFunction().getBasicBlockList()) {
+      if (FoundIRSM) {
+        break;
+      }
+      for (auto I = BBI.begin(), E = BBI.end(); I != E; ++I) {
+        const IntrinsicInst *II;
+        if ((II = dyn_cast<IntrinsicInst>(&*I)) &&
+            II->getCalledFunction()->getName() == SMName &&
+            cast<ConstantInt>(II->getArgOperand(0))->getZExtValue() == ID) {
+          IRSM = cast<IntrinsicInst>(&*I);
+          FoundIRSM = true;
+          break;
+        }
+      }
     }
   }
+
   assert(IRSM && "Could not find associated stackmap instruction");
 
   // Parse operands.
